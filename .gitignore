@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.ipynb_checkpoints/
+
+# Generated figures. The demo regenerates them: `make demo`.
+reports/figures/
+
+# Notebook outputs. The notebook is a build artifact of scripts/build_notebook.py;
+# committing executed outputs would let stale numbers survive a code change.
+# Strip with: nbstripout notebooks/*.ipynb
