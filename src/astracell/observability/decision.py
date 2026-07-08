@@ -185,7 +185,8 @@ def assess(
     except ValueError as exc:
         raise ValueError(f"{target.label()} is not among the differentiated parameters") from exc
 
-    fim = fisher_information(sens, topology, noise)
+    # Passing specs applies Gaussian priors to nuisance parameters (the current bias).
+    fim = fisher_information(sens, topology, noise, specs=specs)
     variance = crlb(fim)[index]
     snr = float(detection_snr(np.array([variance]), magnitude)[0])
     vif = float(variance_inflation(fim)[index])

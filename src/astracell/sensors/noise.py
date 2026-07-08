@@ -8,22 +8,31 @@ Numbers are chosen to be defensible against a datasheet, not optimistic:
   the 1 mV, but present so nobody has to wonder.
 * **Temperature**: sigma = 0.5 K. NTC + ADC, +/-1 K is typical spec; 0.5 K is a
   charitable read of it. Sampled at 1 Hz.
-* **Current**: 0.5% of a 400 A full scale = 2 A. Included in the model, but see
-  the limitation below.
+* **Current**: 0.5% of a 400 A full scale = 2 A random error, plus a systematic
+  offset of the same size carried separately as ``current_bias_sigma_a``.
+* **Correlation**: ``voltage_rho`` / ``temp_rho`` give each channel's noise an
+  AR(1) lag-1 correlation, so 1/f behaviour can be modelled. Default 0 (white).
 
-Two things this model does **not** capture, both of which make the Fisher
-information computed downstream an *optimistic upper bound*:
+This module once carried a docstring asserting that relaxing the white-noise and
+known-current idealisations "would only ever make the reported identifiability
+*worse*, never better, which is the safe direction". **Both are now implemented,
+both were measured, and that claim was false.** See
+``examples/02_noise_robustness.py``:
 
-1. **Noise is white.** Real AFE noise has a 1/f component, so successive samples
-   are correlated and the effective sample count is lower than ``n_time``.
-2. **Current-sensor error is common-mode.** The true current is fed to the
-   simulator as known. In reality a current-sensor bias perturbs every cell's
-   IR drop identically, acting as a nuisance parameter that steals information
-   from the resistance estimate. Treating I as known inflates confidence.
+* Correlated noise does not uniformly hurt; it *reallocates*. Whitening an AR(1)
+  process is a scaled first difference, which suppresses a DC sensitivity by
+  ``(1-rho)/(1+rho)`` and *amplifies* an alternating one by the reciprocal. At
+  ``rho = 0.99`` the resistance bound is 2.6x **tighter** than under white noise,
+  while capacity -- whose signature is a slow SOC ramp -- degrades 10x.
+* Carrying the current bias as a nuisance parameter costs essentially nothing
+  under pulsed excitation (32 voltage channels pin a common-mode offset far
+  better than the shunt does), and is catastrophic under constant current, where
+  every variance inflation factor crosses the multicollinearity threshold.
 
-Both are recorded in ``LIMITATIONS.md``. Neither is hard to add later; both would
-only ever make the reported identifiability *worse*, never better, which is the
-safe direction for a system whose whole point is refusing to overclaim.
+The defaults here (``rho = 0``, and ``include_current_bias=False`` in
+``grey_cell_map``) remain the *optimistic* choice, so the shipped bounds are still
+upper bounds. But "optimistic" is a statement about the defaults, not a theorem
+about the idealisations. ``LIMITATIONS.md`` §2 records what was actually measured.
 """
 
 from __future__ import annotations

@@ -413,15 +413,28 @@ if clears.size:
 - It did not detect a fault. There is no detector.
 - It did not validate anything against a real battery, or a real dataset.
 - It assumed the model is correct. The CRLB bounds *parameter* uncertainty under a
-  known model structure; it says nothing about model mismatch.
-- It assumed white noise, so successive samples are independent and the Fisher
-  information grows linearly with sample count. Real AFE noise has a 1/f component.
-  **Every bound here is therefore optimistic.**
+  known model structure; it says nothing about model mismatch. This remains the
+  largest unquantified gap in the repository.
 - It assumed unbiased estimators. The CRLB does not bound biased ones.
+- It assumed **white noise** (`rho = 0`) and a **perfectly known pack current**.
 
-Each of these makes the reported identifiability *better* than reality, never worse.
-That is the safe direction for a system whose purpose is abstention — but it means a
-green cell is a hypothesis, not a promise.
+An earlier version of this notebook claimed that each of these "makes the reported
+identifiability *better* than reality, never worse — the safe direction for a system
+whose purpose is abstention." **That was an estimate, and it is false.**
+`examples/02_noise_robustness.py` measures it:
+
+- Under AR(1) noise with `rho = 0.99`, the resistance and cooling bounds are **2.6×
+  tighter** than under white noise, because whitening is a first difference and their
+  signatures ride the current pulses. Capacity, whose signature is a near-DC SOC ramp,
+  degrades 10×. Correlated noise does not uniformly hurt — it *reallocates*.
+- At `rho = 0.9`, one of the four headline verdicts flips: cooling on an *instrumented*
+  cell falls from `DIAGNOSE` (5.46σ) to `REFUSE` (1.93σ). A thermocouple's share of the
+  cooling information collapses from 90.4% to 0.8%, and at `rho = 0.99` the
+  instrumented-beats-uninstrumented ordering **inverts**.
+
+So `rho = 0` is the *optimistic* default, not a conservative one, and the direction of
+the error is not knowable without measuring it. A green cell is a hypothesis, not a
+promise — and so, it turns out, is a grey one.
 
 Full accounting: [`LIMITATIONS.md`](../LIMITATIONS.md).
 """),

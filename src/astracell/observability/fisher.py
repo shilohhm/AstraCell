@@ -33,7 +33,12 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from astracell.observability.sensitivity import TEMPERATURE_CHANNEL, VOLTAGE_CHANNEL
+from astracell.observability.sensitivity import (
+    TEMPERATURE_CHANNEL,
+    VOLTAGE_CHANNEL,
+    ParameterSpec,
+    ParamKind,
+)
 from astracell.sensors.noise import NoiseModel
 from astracell.sensors.topology import SensorTopology
 
@@ -83,23 +88,117 @@ def design_matrix(sens: FloatArray, topology: SensorTopology) -> tuple[FloatArra
     return np.vstack(blocks), np.concatenate(kinds)
 
 
-def fisher_information(sens: FloatArray, topology: SensorTopology, noise: NoiseModel) -> FloatArray:
+def whiten_ar1(block: FloatArray, rho: float) -> FloatArray:
+    """Cholesky-whiten an AR(1) noise process along the leading (time) axis.
+
+    For noise ``e_t = rho * e_{t-1} + u_t`` with unit stationary variance, the exact
+    whitening transform -- the Cholesky factor ``L`` of ``R^-1 = L^T L`` -- is
+
+        x~[0] = x[0]
+        x~[t] = ( x[t] - rho * x[t-1] ) / sqrt(1 - rho^2)        for t >= 1
+
+    so that ``x~^T x~ == x^T R^-1 x`` exactly, where ``R[i,j] = rho^|i-j|``. O(n), and no
+    n x n matrix is ever formed. ``rho = 0`` returns the input unchanged, so the
+    white-noise case is recovered bit-for-bit rather than approximately.
+
+    Getting the ``sqrt(1 - rho^2)`` onto the right row matters: put it on ``x~[0]``
+    instead and every information number is scaled by ``(1 - rho^2)``, silently. That is
+    an easy mistake and it is caught by
+    ``tests/test_noise_correlation.py::test_whitening_reproduces_the_inverse_correlation_quadratic_form``,
+    which builds ``R`` densely and inverts it.
+
+    What this does to information is the whole robustness story. The transform is a scaled
+    first difference. A **constant** sensitivity keeps only a fraction ``(1-rho)/(1+rho)``
+    of its information; an **alternating** one *gains* a factor ``(1+rho)/(1-rho)``. Slow
+    signatures pay. Fast ones are paid.
+    """
+    if rho == 0.0:
+        return block
+    out = np.empty_like(block)
+    out[0] = block[0]
+    out[1:] = (block[1:] - rho * block[:-1]) / np.sqrt(1.0 - rho * rho)
+    return out
+
+
+def _channel_blocks(
+    sens: FloatArray, topology: SensorTopology, noise: NoiseModel
+) -> list[tuple[FloatArray, float, float]]:
+    """``[(block, sigma, rho), ...]`` with block shaped ``(n_time, n_chan, n_params)``."""
+    blocks: list[tuple[FloatArray, float, float]] = []
+    if topology.n_voltage:
+        blocks.append(
+            (
+                sens[:, topology.voltage_index, VOLTAGE_CHANNEL, :],
+                np.sqrt(noise.voltage_variance),
+                noise.voltage_rho,
+            )
+        )
+    if topology.n_temp:
+        blocks.append(
+            (
+                sens[:, topology.temp_index, TEMPERATURE_CHANNEL, :],
+                np.sqrt(noise.temp_variance),
+                noise.temp_rho,
+            )
+        )
+    return blocks
+
+
+def fisher_information(
+    sens: FloatArray,
+    topology: SensorTopology,
+    noise: NoiseModel,
+    specs: tuple[ParameterSpec, ...] | None = None,
+) -> FloatArray:
     """``FIM = S^T Sigma^-1 S``, shape ``(n_params, n_params)``.
 
-    Assumes independent Gaussian noise on every sample of every channel. Under a
-    white-noise model this is exact, and it is why the FIM grows linearly with the
-    number of samples: denser sampling really does buy information. Real AFE noise
-    is not white, so this is an upper bound on the information -- see
-    ``sensors/noise.py`` and ``LIMITATIONS.md``.
-    """
-    rows, kinds = design_matrix(sens, topology)
-    if rows.shape[0] == 0:
-        return np.zeros((sens.shape[3], sens.shape[3]))
+    ``Sigma`` is block-diagonal by channel; within a channel the noise is AR(1) with
+    correlation ``noise.voltage_rho`` / ``noise.temp_rho``. With rho = 0 this reduces
+    exactly to independent samples, and the FIM grows linearly with sample count --
+    denser sampling really does buy information, *if* the noise is white.
 
-    variances = np.where(kinds == 0, noise.voltage_variance, noise.temp_variance)
-    weighted = rows / np.sqrt(variances)[:, None]
-    fim = weighted.T @ weighted
+    Pass ``specs`` to add Gaussian priors on nuisance parameters, which turns this into
+    a Bayesian (Van Trees) information matrix. Currently the only such parameter is the
+    current-sensor bias; see ``prior_information``.
+    """
+    n_params = sens.shape[3]
+    fim = np.zeros((n_params, n_params))
+
+    for block, sigma, rho in _channel_blocks(sens, topology, noise):
+        n_time, n_chan, _ = block.shape
+        whitened = whiten_ar1(block, rho).reshape(n_time * n_chan, n_params) / sigma
+        fim += whitened.T @ whitened
+
+    if specs is not None:
+        if len(specs) != n_params:
+            raise ValueError(f"{len(specs)} specs for {n_params} parameter columns")
+        fim = fim + prior_information(specs, noise)
+
     return 0.5 * (fim + fim.T)  # symmetrise away accumulation asymmetry
+
+
+def prior_information(specs: tuple[ParameterSpec, ...], noise: NoiseModel) -> FloatArray:
+    """Diagonal prior information for nuisance parameters, ``1 / sigma_prior^2``.
+
+    The current-sensor bias is not determined by the pack's voltages alone -- a constant
+    offset in the current aliases, in part, with a common-mode resistance change. What
+    pins it down is the shunt's own accuracy specification, which is exactly a Gaussian
+    prior of width ``noise.current_bias_sigma_a``.
+
+    Adding it here makes the resulting bound a **Bayesian Cramer-Rao bound** (Van Trees).
+    Without the prior, a marginal current bias would be unidentifiable under constant
+    current and the CRLB for every cell's R0 would blow up -- which would be pessimistic
+    rather than honest, because we do in fact know the shunt is within spec.
+
+    Physical (per-cell) parameters get no prior. We are not willing to assume a cell is
+    healthy in order to conclude that it is healthy.
+    """
+    n = len(specs)
+    prior = np.zeros((n, n))
+    for i, spec in enumerate(specs):
+        if spec.kind is ParamKind.CURRENT_BIAS:
+            prior[i, i] = 1.0 / noise.current_bias_sigma_a**2
+    return prior
 
 
 def crlb(
@@ -189,15 +288,37 @@ def condition_number(fim: FloatArray) -> float:
     return lam_max / lam_min
 
 
+def gaussian_entropy(fim: FloatArray) -> float:
+    """Differential entropy [nats] of a Gaussian posterior with covariance ``FIM^-1``.
+
+        H = 0.5 * ( k*log(2*pi*e) - log det FIM )
+
+    Infinite when the FIM is singular: an unidentified direction carries unbounded
+    uncertainty, and saying so is the point.
+    """
+    fim = np.asarray(fim, dtype=float)
+    k = fim.shape[0]
+    sign, logdet = np.linalg.slogdet(fim)
+    if sign <= 0:
+        return float("inf")
+    return 0.5 * (k * float(np.log(2.0 * np.pi * np.e)) - float(logdet))
+
+
 def information_gain(fim_before: FloatArray, fim_after: FloatArray) -> float:
     """``0.5 * log det(FIM_after / FIM_before)`` in nats: the D-optimality score.
 
-    This is the expected reduction in the entropy of a Gaussian posterior when the
-    information improves from ``fim_before`` to ``fim_after``. Used to rank
-    candidate sensor placements and candidate diagnostic tests.
+    Exactly ``gaussian_entropy(before) - gaussian_entropy(after)``: the reduction in the
+    differential entropy of a Gaussian posterior when the information improves. Used to
+    rank candidate sensor placements and candidate diagnostic tests.
+
+    Returns ``inf`` when the prior information is singular but the posterior is not --
+    an experiment that makes an unidentified parameter identifiable gains, formally,
+    unbounded information. Returns ``0.0`` when the posterior is still singular.
     """
     sign_a, logdet_a = np.linalg.slogdet(np.asarray(fim_after, dtype=float))
     sign_b, logdet_b = np.linalg.slogdet(np.asarray(fim_before, dtype=float))
-    if sign_a <= 0 or sign_b <= 0:
-        return float("inf") if sign_a > 0 else 0.0
+    if sign_a <= 0:
+        return 0.0
+    if sign_b <= 0:
+        return float("inf")
     return 0.5 * float(logdet_a - logdet_b)

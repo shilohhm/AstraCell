@@ -25,7 +25,14 @@ import numpy as np
 from numpy.typing import NDArray
 
 from astracell.observability.fisher import crlb, fisher_information
-from astracell.observability.sensitivity import ParameterSpec, ParamKind, all_specs, sensitivities
+from astracell.observability.sensitivity import (
+    CELL_PARAM_KINDS,
+    ParameterSpec,
+    ParamKind,
+    all_specs,
+    sensitivities,
+    with_current_bias,
+)
 from astracell.pack.params import PackParams
 from astracell.sensors.noise import NoiseModel
 from astracell.sensors.topology import SensorTopology
@@ -108,6 +115,7 @@ def grey_cell_map(
     kind: ParamKind,
     magnitude: float,
     confounders: tuple[ParamKind, ...] | None = None,
+    include_current_bias: bool = False,
     weak_sigma: float = DEFAULT_WEAK_SIGMA,
     strong_sigma: float = DEFAULT_STRONG_SIGMA,
     soc0: float = 0.75,
@@ -123,17 +131,19 @@ def grey_cell_map(
     all three kinds that is 192 short simulations -- a few seconds. Restrict
     ``confounders`` to trade honesty for speed, and say so if you do.
     """
-    confounders = confounders or tuple(ParamKind)
+    confounders = confounders or CELL_PARAM_KINDS
     if kind not in confounders:
         raise ValueError(f"target kind {kind} must appear in confounders {confounders}")
 
     specs = all_specs(params.n_cells, confounders)
+    if include_current_bias:
+        specs = with_current_bias(specs)
     sens = sensitivities(params, current_a, dt_s, specs, soc0=soc0)
-    fim = fisher_information(sens, topology, noise)
+    fim = fisher_information(sens, topology, noise, specs=specs)
     variance = crlb(fim)
 
     target = np.array([i for i, s in enumerate(specs) if s.kind is kind], dtype=int)
-    order = np.argsort([specs[i].cell for i in target])
+    order = np.argsort([specs[i].cell for i in target])  # cell is not None for CELL_PARAM_KINDS
     target = target[order]
 
     var_target = variance[target]
@@ -165,7 +175,7 @@ def snr_for_topology(
         index = specs.index(target)
     except ValueError as exc:  # pragma: no cover - programmer error
         raise ValueError(f"{target.label()} is not among the differentiated parameters") from exc
-    fim = fisher_information(sens, topology, noise)
+    fim = fisher_information(sens, topology, noise, specs=specs)
     return float(detection_snr(crlb(fim)[index : index + 1], magnitude)[0])
 
 
