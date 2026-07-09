@@ -412,11 +412,15 @@ if clears.size:
 
 - It did not detect a fault. There is no detector.
 - It did not validate anything against a real battery, or a real dataset.
-- It assumed the model is correct. The CRLB bounds *parameter* uncertainty under a
-  known model structure; it says nothing about model mismatch. This remains the
-  largest unquantified gap in the repository.
 - It assumed unbiased estimators. The CRLB does not bound biased ones.
 - It assumed **white noise** (`rho = 0`) and a **perfectly known pack current**.
+- It assumed **the model is correct**, which is the expensive one. The CRLB bounds
+  *parameter* uncertainty under a known model structure and says nothing about model
+  mismatch. `examples/04_model_mismatch.py` prices it: fit this first-order ECM to a plant
+  with a slow diffusion branch and the estimator manufactures an apparent **18.5% capacity
+  loss** — nearly four times the 5% fault it was asked to find. The 32.6σ capacity diagnosis
+  above is worth **0.27σ**. Worse, that error is a *bias*: replicate this experiment 10 000
+  times and the reported SNR climbs to 14 611σ while the credible SNR does not move at all.
 
 An earlier version of this notebook claimed that each of these "makes the reported
 identifiability *better* than reality, never worse — the safe direction for a system
@@ -435,6 +439,9 @@ whose purpose is abstention." **That was an estimate, and it is false.**
 So `rho = 0` is the *optimistic* default, not a conservative one, and the direction of
 the error is not knowable without measuring it. A green cell is a hypothesis, not a
 promise — and so, it turns out, is a grey one.
+
+There are two ways to be wrong about a battery. This notebook computes one of them.
+Only that one yields to more data.
 
 Full accounting: [`LIMITATIONS.md`](../LIMITATIONS.md).
 """),

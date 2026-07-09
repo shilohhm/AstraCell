@@ -178,8 +178,8 @@ def sensitivities(
     *,
     eps: float = DEFAULT_EPS,
     eps_current_a: float = DEFAULT_EPS_CURRENT_A,
-    soc0: float = 0.75,
-    temp0_k: float | None = None,
+    soc0: float | FloatArray = 0.75,
+    temp0_k: float | FloatArray | None = None,
 ) -> FloatArray:
     """Central-difference sensitivity tensor.
 

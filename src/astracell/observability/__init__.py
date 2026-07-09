@@ -18,10 +18,21 @@ When the answer is "unobservable", ``experiment`` and ``mask.recommend_temp_sens
 say what would change it: excite differently, or instrument differently.
 """
 
+from astracell.observability.bias import (
+    BiasConvergenceError,
+    bias_aware_snr,
+    bias_ceiling,
+    parameter_bias,
+    pseudo_true_bias,
+    residual_score,
+    solve_bias,
+    structural_residual,
+)
 from astracell.observability.decision import (
     Verdict,
     VerdictKind,
     assess,
+    assess_under_mismatch,
     decide,
     sensor_recommendation,
 )
@@ -34,6 +45,7 @@ from astracell.observability.experiment import (
     render_ranking,
 )
 from astracell.observability.fisher import (
+    channel_slices,
     condition_number,
     crlb,
     crlb_std,
@@ -68,12 +80,13 @@ from astracell.observability.sensitivity import (
 )
 
 __all__ = [
+    "BiasConvergenceError",
     "CELL_PARAM_KINDS",
     "CURRENT_BIAS_SPEC",
+    "CandidateTest",
     "DEFAULT_STRONG_SIGMA",
     "DEFAULT_WEAK_SIGMA",
     "GLOBAL_PARAM_KINDS",
-    "CandidateTest",
     "GreyCellMap",
     "HeatmapResult",
     "Observability",
@@ -84,6 +97,10 @@ __all__ = [
     "VerdictKind",
     "all_specs",
     "assess",
+    "assess_under_mismatch",
+    "bias_aware_snr",
+    "bias_ceiling",
+    "channel_slices",
     "classify",
     "condition_number",
     "crlb",
@@ -98,12 +115,17 @@ __all__ = [
     "grey_cell_map",
     "information_gain",
     "local_specs",
+    "parameter_bias",
     "prior_information",
+    "pseudo_true_bias",
     "rank_tests",
     "recommend_temp_sensor",
     "render_ranking",
+    "residual_score",
     "sensitivities",
     "sensor_recommendation",
+    "solve_bias",
+    "structural_residual",
     "variance_inflation",
     "whiten_ar1",
     "with_current_bias",

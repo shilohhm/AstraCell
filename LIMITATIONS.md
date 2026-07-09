@@ -134,15 +134,17 @@ remains an upper bound.
 
 ### 2c. Still-unrelaxed idealisations
 
-3. **The model is assumed correct.** The FIM measures *parameter* uncertainty
-   under a known model structure. It says nothing about model mismatch. A real
-   observer runs a lower-fidelity model than the plant, and the resulting residual
-   bias does not appear anywhere in a Cramér–Rao bound. This is the largest
-   remaining gap and it is not quantified anywhere in this repo.
+3. **The model is assumed correct.** This was, until §12 below, "the largest
+   remaining gap, not quantified anywhere in this repo." It is now quantified, and
+   it is worse than the noise idealisation was. Everything the CRLB says remains
+   conditional on a model structure that is false, and the resulting bias is
+   invisible to every number in §§1–11. See **§12**.
 4. **Estimators are assumed unbiased.** The CRLB does not bound biased estimators.
    Regularised, thresholded, or ML estimators routinely beat it in MSE by trading
    bias for variance. "Below 2σ" therefore means "no *unbiased* estimator sees
-   this", which is the right conservative reading but not the only one.
+   this", which is the right conservative reading but not the only one. Note the
+   irony now that §12 exists: the estimator is not unbiased, and its bias is not a
+   deliberate trade for variance. It is an accident of the model.
 5. **Sensitivities are local.** Central finite differences at `eps = 1e-3`
    relative. A 40% capacity fault is not a small perturbation, and the linearised
    bound will misstate detectability for large faults — in an unknown direction.
@@ -243,14 +245,24 @@ qualitative statement only — see limitation 1.
 - No real battery has been measured.
 - No real fault has been detected.
 - No public dataset has been ingested.
-- No estimator has been implemented, so no CRLB has been shown to be attainable.
 - No claim in this repository has been validated against anything but itself.
+- No CRLB has been shown to be *attainable*. `bias.pseudo_true_bias` implements a damped
+  Gauss–Newton estimator, but only to locate the pseudo-true parameter under noiseless
+  data. Nobody has run an estimator on noisy data and compared its scatter to the bound.
 
-A simulation that validates a diagnostic method against the simulator that
-generated the data is a tautology. The correct next step is to inject faults with
-a **higher-fidelity model** than the one the observer assumes (PyBaMM DFN with
-degradation submodels), so that model mismatch is part of the experiment. That is
-not done here.
+This section used to end: *"the correct next step is to inject faults with a **higher-fidelity
+model** than the one the observer assumes, so that model mismatch is part of the experiment.
+That is not done here."* **It is now done** — see §12 and `src/astracell/plant/` — but with a
+hand-written intermediate plant, not PyBaMM.
+
+That choice was deliberate and it has a cost. The benefit: a plant whose mismatch knobs all
+default to zero collapses onto the observer bit-for-bit, so "the bias vanishes when the
+mismatch does" is a *falsifiable* control rather than an article of faith. With PyBaMM you
+can never switch the mismatch off, so you can never establish that a reported bias is not a
+bug in your own harness. The cost: the four structural terms are hand-chosen, so §12 measures
+**a lower bound on how wrong we are**, not how wrong we are. Replacing the plant with PyBaMM
+(DFN, or SPMe with degradation submodels) is the next step, and now it has a harness and a
+control to be checked against.
 
 ---
 
@@ -261,3 +273,113 @@ fields. They are exposed as arguments (`weak_sigma`, `strong_sigma`) rather than
 buried, because there is no principled reason for them absent a stated cost of a
 false positive versus a missed detection. The condition-number threshold for
 declaring parameters confounded (`1e4`) is likewise a convention.
+
+---
+
+## 12. The observer's model is wrong, and now we know what that costs
+
+Sections 1–11 all describe *variance*: how finely a correct model could be pinned
+down by imperfect data. This section describes *bias*: how far a wrong model lands
+from the truth however perfect the data. They are not the same kind of error and
+the difference is the point.
+
+`examples/04_model_mismatch.py` runs a higher-fidelity **plant** — SOC-dependent
+`R0`, a slow diffusion branch the ECM lacks, a core/surface thermal split, and a
+laggy thermocouple — against the same first-order ECM **observer** the rest of the
+repository uses. Both are given *identical* parameters, so every difference is
+structural. The fit does not converge on the true `θ*` but on the pseudo-true
+
+```
+θ₀ = argmin_θ ‖ g(θ*, u) − f(θ, u) ‖²_Σ⁻¹        b = θ₀ − θ*
+```
+
+### 12a. What it costs
+
+Measured on the 4×8 demo pack, 1200 s of 1.0C pulse train, cell 10, ammeter believed,
+on the three-parameter local spec set (so the CRLBs differ slightly from README §1, which
+carries all 97 parameters and hence cross-cell confounding):
+
+| hypothesis | CRLB (1σ) | SNR (variance) | structural bias | SNR (total) | verdict change |
+|---|---:|---:|---:|---:|---|
+| `R0` +20% | ±0.14% | 146.11σ | −3.08% | **6.49σ** | DIAGNOSE → DIAGNOSE |
+| capacity −5% | ±0.15% | 32.65σ | **−18.53%** | **0.27σ** | DIAGNOSE → **REFUSE_MODEL_BIAS** |
+| cooling −40% | ±28.6% | 1.40σ | +1043% | 0.04σ | REFUSE → REFUSE |
+
+Because the mismatch is pack-global the capacity bias is **common-mode** (−18.45% / −18.53% /
+−18.56% on cells 5 / 10 / 17). It does not single out a bad cell, so no cross-cell comparison
+detects it. This is the same fact that lets a pack-global nuisance parameter absorb it (§12c).
+
+The capacity bias is not a bug. It is arithmetic: a slow polarisation droop of a few
+millivolts is indistinguishable from coulombs that never left the cell, so the observer
+attributes it to a capacity 18.5% smaller than the truth — **almost four times the fault
+it was asked to look for.** Short-window capacity estimation with a first-order ECM
+manufactures the very fault it is hunting.
+
+`hA`'s bias is dominated by the **electrical** blind spots, not the thermal ones, because
+an uninstrumented cell's cooling coefficient is only ever seen through `R0(T)`. Model
+error in the voltage channel arrives disguised as a thermal fault. That is a direct
+consequence of the mechanism celebrated in README §3.
+
+### 12b. Why more data does not help
+
+`b` is *exactly* invariant to the two things that shrink the CRLB. Replicate the same
+experiment `k` times and both the FIM and the score scale by `k`, so `b = FIM⁻¹Sᵀ Σ⁻¹ r`
+is unchanged bit for bit. Scale every noise `σ` by `c` and the same cancellation occurs.
+Meanwhile `sqrt(CRLB)` falls as `1/√k` and rises as `c`. Both invariances are asserted in
+`tests/test_mismatch.py`.
+
+So `SNR_total = m/√(CRLB + b²) → m/|b|`, a **ceiling**. On the table above, ten thousand
+repetitions of that experiment move `R0`'s reported SNR from 146σ to 14 611σ and its
+*actual* credibility not at all: it sits at 6.49σ throughout. **A CRLB-only system grows
+unboundedly more confident and no less wrong the more data you feed it.**
+
+### 12c. What this breaks elsewhere in the repo
+
+- **Excitation does not remove structural error. It decides which parameter absorbs it.**
+  Raising the pulse amplitude from 0.25C to 2.5C improves every CRLB, drives `R0`'s bias
+  from −10.1% through zero to +1.1%, and drives capacity's from −2.2% to −19.3% — capacity's
+  bias *ceiling* falling from 2.26σ to 0.26σ as it does so. The Ds-optimal test planner of
+  `examples/03_next_best_test.py` will therefore recommend a hard pulse train to sharpen
+  a capacity estimate and destroy its credibility in the process. **It optimises variance
+  and cannot see bias. That is a real defect in §8 of the README, not a nuance.**
+- **Nuisance parameters are where model error hides.** Freeing the pack-global current
+  bias collapses capacity's bias from −18.5% to +0.3% — genuinely, because a nuisance
+  regressor spanning the residual is the textbook cure for omitted-variable bias. The
+  price is a reported shunt offset of **+1.11 A that is not a shunt offset at all**, sits
+  comfortably inside its 2 A prior, and is flagged by nothing. §2b called that nuisance
+  parameter "cheap". It is cheap in variance and expensive in interpretability.
+- **`README.md` §1's headline table, and every SNR in §§1–8, are variance-only.** They are
+  upper bounds on the performance of an estimator using a model we know to be false.
+
+### 12d. What §12 itself is not
+
+- **The plant is not a battery.** It is the ECM plus four hand-chosen structural terms at
+  order-of-magnitude-plausible strengths. It is a *lower bound on how wrong we are*, not a
+  measurement of it. The next step is PyBaMM (DFN or SPMe) as the plant. It is not done.
+- **`b` is computed against a plant we guessed**, so it is an estimate of the *scale* of an
+  error we cannot average away, never a correction to subtract. Subtracting it would
+  assume the guess. The decision layer therefore widens uncertainty rather than shifting
+  the estimate.
+- **The ceiling belongs to an experiment, not to a pack.** A different duty cycle has a
+  different `b`. Do not read the 1090σ ceiling that appears at a 2.00C pulse as an
+  operating point: it is a zero crossing, and a ±10% change in the assumed diffusion
+  resistance *flips the sign* of `R0`'s bias there. Tuning a duty cycle to null a bias
+  inferred from your own guess of the plant calibrates against the guess.
+- **`parameter_bias` is first order.** At full `REALISTIC_MISMATCH` it overstates
+  capacity's bias by ~18% and understates `hA`'s by ~43% against the iterated
+  `pseudo_true_bias`. Quote the iterated fit. The two converge as the mismatch shrinks
+  (45% → 0.4% relative error over a 300× range), which is the only reason to believe
+  either.
+- **The mismatch is pack-global**, hence common-mode. A *cell-specific* structural error —
+  one cell whose diffusion branch has degraded — would not be absorbed by any pack-global
+  nuisance, and is not modelled.
+- **`θ*` is a convention.** The plant has no parameter called "`R0`"; it has `R0(SOC, T)`.
+  Every mismatch term is defined to vanish at the initial operating point so that the
+  residual is exactly zero at `t = 0` and `θ*` is at least unambiguous *there*.
+
+### 12e. The one thing §12 does not undermine
+
+`REFUSE_UNOBSERVABLE` still fires first, and it is still right. A cooling fault on a cell
+with no thermocouple was never diagnosable, and adding model bias to a hypothesis that was
+already refused changes nothing. Where AstraCell was silent, it remains correctly silent.
+Where it was *confident*, it was sometimes confidently wrong, and now it says so.

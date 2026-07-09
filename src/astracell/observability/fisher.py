@@ -120,28 +120,45 @@ def whiten_ar1(block: FloatArray, rho: float) -> FloatArray:
     return out
 
 
-def _channel_blocks(
-    sens: FloatArray, topology: SensorTopology, noise: NoiseModel
-) -> list[tuple[FloatArray, float, float]]:
-    """``[(block, sigma, rho), ...]`` with block shaped ``(n_time, n_chan, n_params)``."""
-    blocks: list[tuple[FloatArray, float, float]] = []
+def channel_slices(
+    topology: SensorTopology, noise: NoiseModel
+) -> list[tuple[NDArray[np.intp], int, float, float]]:
+    """``[(cell_index, channel, sigma, rho), ...]`` for every instrumented channel group.
+
+    The single source of truth for "which cells are measured, on which channel, with what
+    noise". ``fisher_information`` and ``bias.residual_score`` both index through this, so a
+    residual can never be whitened differently from the sensitivities it is projected onto.
+    """
+    slices: list[tuple[NDArray[np.intp], int, float, float]] = []
     if topology.n_voltage:
-        blocks.append(
+        slices.append(
             (
-                sens[:, topology.voltage_index, VOLTAGE_CHANNEL, :],
-                np.sqrt(noise.voltage_variance),
+                topology.voltage_index,
+                VOLTAGE_CHANNEL,
+                float(np.sqrt(noise.voltage_variance)),
                 noise.voltage_rho,
             )
         )
     if topology.n_temp:
-        blocks.append(
+        slices.append(
             (
-                sens[:, topology.temp_index, TEMPERATURE_CHANNEL, :],
-                np.sqrt(noise.temp_variance),
+                topology.temp_index,
+                TEMPERATURE_CHANNEL,
+                float(np.sqrt(noise.temp_variance)),
                 noise.temp_rho,
             )
         )
-    return blocks
+    return slices
+
+
+def _channel_blocks(
+    sens: FloatArray, topology: SensorTopology, noise: NoiseModel
+) -> list[tuple[FloatArray, float, float]]:
+    """``[(block, sigma, rho), ...]`` with block shaped ``(n_time, n_chan, n_params)``."""
+    return [
+        (sens[:, index, channel, :], sigma, rho)
+        for index, channel, sigma, rho in channel_slices(topology, noise)
+    ]
 
 
 def fisher_information(

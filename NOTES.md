@@ -11,3 +11,7 @@ What AstraCell does NOT prove:
 - That current is perfectly known.
 - That a single-node thermal model is realistic.
 - That real BMS data exposes enough telemetry.
+
+
+Important for post-project evaluation
+**    I initially claimed correlated noise always made AstraCell more conservative. A test falsified that. The corrected AR(1) whitening showed that correlated noise reallocates information: it hurts DC-like capacity signatures but can strengthen pulsed R0/hA signatures. That changed the recommendation from “add a thermocouple” to “run a pulse test” in one case **
