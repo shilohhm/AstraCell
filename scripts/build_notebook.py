@@ -1,8 +1,11 @@
-"""Generate ``notebooks/01_identifiability_study.ipynb``.
+"""Generate the notebooks under ``notebooks/``.
 
-The notebook is a build artifact, not a hand-maintained source file. Cells live here
-as plain strings, which means they are diffable, greppable, and cannot accumulate
-stale outputs in version control.
+The notebooks are build artifacts, not hand-maintained source files. Cells live here as
+plain strings, which means they are diffable, greppable, and cannot accumulate stale outputs
+in version control.
+
+    01_identifiability_study.ipynb   what could any estimator resolve? (v0.0-v0.1)
+    02_calibrated_abstention.ipynb   are the verdicts calibrated across repeated trials? (v0.2)
 
 Run:  python scripts/build_notebook.py
 """
@@ -12,7 +15,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-NOTEBOOK = Path(__file__).resolve().parents[1] / "notebooks" / "01_identifiability_study.ipynb"
+NOTEBOOKS = Path(__file__).resolve().parents[1] / "notebooks"
+NOTEBOOK_01 = NOTEBOOKS / "01_identifiability_study.ipynb"
+NOTEBOOK_02 = NOTEBOOKS / "02_calibrated_abstention.ipynb"
 
 
 def md(text: str) -> dict:
@@ -33,7 +38,7 @@ def code(text: str) -> dict:
     }
 
 
-CELLS = [
+CELLS_01 = [
     md("""
 # AstraCell — Identifiability Study
 
@@ -448,9 +453,250 @@ Full accounting: [`LIMITATIONS.md`](../LIMITATIONS.md).
 ]
 
 
-def main() -> None:
+CELLS_02 = [
+    md("""
+# AstraCell — Calibrated Abstention
+
+**Are the verdicts calibrated, or just convincing?**
+
+v0.1 showed AstraCell can compute a structural bias and refuse when it dominates — on *one*
+example. This notebook asks the harder question across thousands of repeated experiments with
+a **known injected truth**:
+
+> When AstraCell says DIAGNOSE, WEAK, or REFUSE, and when it draws a confidence interval, do
+> those claims hold up as *frequencies*? Does a 90% interval cover the truth 90% of the time?
+
+To ask that at all, v0.2 adds something the repository never had: **an estimator**. Everything
+before was a property of the design. Here a Gauss-Newton (matched, to test attainment) or an
+exact linear-Gaussian fit (mismatched, for speed) turns each noisy realisation into an
+estimate and a verdict, and `astracell.calibration` counts how often they hold up.
+
+> ⚠️ This proves **self-consistency**, not external truth. There are no real batteries here.
+> It shows AstraCell is honest about its own noise and its own model error, on its own terms.
+> The line between what that validates and what it cannot is drawn in
+> [`docs/CALIBRATION.md`](../docs/CALIBRATION.md).
+"""),
+    code("""
+import matplotlib.pyplot as plt
+import numpy as np
+
+from astracell.calibration import (
+    NOMINAL_LEVELS,
+    abstention_metrics,
+    build_scenario,
+    coverage_curve,
+    run_trials,
+    sample_count_curve,
+    verdict_distribution,
+)
+from astracell.duty import pulse_train
+from astracell.observability.decision import VerdictKind
+from astracell.observability.sensitivity import ParamKind
+from astracell.plant import REALISTIC_MISMATCH
+
+plt.rcParams["figure.dpi"] = 110
+SEED = 0
+BLIND_CELL = 1          # voltage only, on the 2x2 demo pack
+WINDOW = pulse_train(600.0, 1.0, mean_c_rate=0.2, pulse_c_rate=1.0).current_a
+"""),
+    md("""
+---
+## 1. Coverage vs nominal: does a 90% interval cover 90% of the time?
+
+A capacity fault, estimated two ways. Under a **matched** model the maximum-likelihood
+interval should cover at its nominal rate — which would show the Cramér–Rao bound is
+*attained*, not merely asserted. Under **mismatch** the variance-only interval is centred on
+the pseudo-true value, an entire structural bias away from the truth, so it covers essentially
+never. Widening it to admit the bias restores coverage only by becoming uselessly wide.
+"""),
+    code("""
+matched = build_scenario(name="cap/matched", fault_kind=ParamKind.CAPACITY,
+                         target_cell=BLIND_CELL, current_a=WINDOW)
+mismatch = build_scenario(name="cap/mismatch", fault_kind=ParamKind.CAPACITY,
+                          target_cell=BLIND_CELL, current_a=WINDOW, mismatch=REALISTIC_MISMATCH)
+
+res_matched = run_trials(matched, 150, seed=SEED, estimator="gauss_newton",
+                         estimator_options={"max_iter": 10, "step_tol": 1e-5})
+res_mismatch = run_trials(mismatch, 250, seed=SEED, estimator="linear")
+
+cov_matched = coverage_curve(res_matched)
+cov_var = coverage_curve(res_mismatch, bias_aware=False)
+cov_bias = coverage_curve(res_mismatch, bias_aware=True)
+
+print(f"matched sigma = {res_matched.crlb_std:.3%}   mismatch bias = {res_mismatch.bias:+.2%}\\n")
+print(f"{'nominal':>8s} {'matched (MLE)':>15s} {'mismatch var':>14s} {'mismatch bias-aware':>21s}")
+for lvl, cm, cv, cb in zip(NOMINAL_LEVELS, cov_matched, cov_var, cov_bias, strict=True):
+    print(f"{lvl:8.0%} {cm:15.2%} {cv:14.2%} {cb:21.2%}")
+"""),
+    code("""
+fig, ax = plt.subplots(figsize=(6.0, 5.2))
+grid = np.array(NOMINAL_LEVELS)
+ax.plot([0, 1], [0, 1], ls="--", color="#455a64", lw=1.0, label="perfect calibration")
+ax.plot(grid, cov_matched, "o-", color="#2e7d32", label="matched (MLE)")
+ax.plot(grid, cov_var, "s-", color="#c62828", label="mismatched, variance-only")
+ax.plot(grid, cov_bias, "^-", color="#1565c0", label="mismatched, bias-aware")
+ax.set(xlabel="nominal confidence", ylabel="empirical coverage",
+       xlim=(0.45, 1.0), ylim=(-0.03, 1.03),
+       title="A 90% interval should cover 90% of the time.")
+ax.legend(fontsize=8, loc="center left")
+ax.grid(alpha=0.3)
+plt.show()
+"""),
+    md("""
+The matched curve hugs the diagonal: the estimator reaches the bound. The variance-only curve
+under mismatch sits flat on the floor — confident and wrong at every level. This is the first
+time the repository has shown the CRLB is attainable, and the first time it has *measured* its
+own overconfidence rather than argued about it.
+"""),
+    md("""
+---
+## 2. More data buys precision, not accuracy
+
+The central claim of the whole project, now empirical. Repeat the mismatched experiment `k`
+times. The variance-only SNR grows as `sqrt(k)`, without bound. The bias-aware SNR saturates
+at a ceiling `|m|/|b|` and stops dead — because the estimate cloud tightens onto the
+pseudo-true value, which was never the truth.
+"""),
+    code("""
+counts = np.array([1.0, 3.0, 10.0, 30.0, 100.0, 1000.0, 10000.0])
+curve = sample_count_curve(res_mismatch, counts)
+
+print(f"true fault {res_mismatch.delta_true:+.0%}   bias {res_mismatch.bias:+.2%}   "
+      f"estimate settles at {curve.center:+.2%}   ceiling {curve.ceiling:.3f} sigma\\n")
+print(f"{'repeats':>9s} {'SNR (variance)':>16s} {'SNR (bias-aware)':>18s}")
+for k, sv, sb in zip(counts, curve.snr_var, curve.snr_bias, strict=True):
+    print(f"{int(k):9d} {sv:16.1f} {sb:18.3f}")
+
+fig, (left, right) = plt.subplots(1, 2, figsize=(11.5, 4.4))
+left.loglog(counts, curve.snr_var, "o-", color="#c62828", label="variance only")
+left.loglog(counts, curve.snr_bias, "s-", color="#1565c0", label="bias-aware")
+left.axhline(5.0, ls=":", color="#2e7d32", label="5 sigma")
+left.set(xlabel="independent repetitions", ylabel="detection SNR",
+         title="Confidence climbs; credibility saturates.")
+left.legend(fontsize=8); left.grid(alpha=0.3, which="both")
+
+right.fill_between(counts, 100 * curve.band_lo, 100 * curve.band_hi,
+                   color="#c62828", alpha=0.25, label="95% of estimates")
+right.axhline(100 * curve.center, color="#c62828", lw=1.2, label="estimate centre")
+right.axhline(100 * res_mismatch.delta_true, ls="--", color="#2e7d32", lw=1.3, label="the truth")
+right.set(xscale="log", xlabel="independent repetitions", ylabel="capacity estimate (%)",
+          title="The cloud tightens onto the wrong answer.")
+right.legend(fontsize=8); right.grid(alpha=0.3, which="both")
+plt.show()
+"""),
+    md("""
+---
+## 3. Where AstraCell diagnoses, weakens, and refuses
+
+Sweep the true fault magnitude and watch the verdict distribution move. Under mismatch the
+capacity diagnosis is *capped*: no matter how large the true fault, the structural bias keeps
+the credible SNR below threshold, so `REFUSE_MODEL_BIAS` dominates and the diagnosis rate never
+rises. Resistance, whose structural bias is small, diagnoses freely once the fault clears the
+noise. Same gate, opposite outcomes — because one parameter's model error is fatal and the
+other's is not.
+"""),
+    code("""
+STYLE = {
+    VerdictKind.DIAGNOSE: ("#2e7d32", "diagnose"),
+    VerdictKind.WEAK_EVIDENCE: ("#f9a825", "weak"),
+    VerdictKind.REFUSE_UNOBSERVABLE: ("#9e9e9e", "refuse: unobservable"),
+    VerdictKind.REFUSE_CONFOUNDED: ("#6a1b9a", "refuse: confounded"),
+    VerdictKind.REFUSE_MODEL_BIAS: ("#c62828", "refuse: model bias"),
+}
+sweeps = [
+    ("R0", ParamKind.R0, np.array([0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3])),
+    ("capacity", ParamKind.CAPACITY, np.array([0.0, -0.01, -0.02, -0.05, -0.1, -0.2, -0.3])),
+]
+fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.2))
+for ax, (label, kind, mags) in zip(axes, sweeps, strict=True):
+    fractions = {v: np.zeros(len(mags)) for v in VerdictKind}
+    for i, mag in enumerate(mags):
+        sc = build_scenario(name="s", fault_kind=kind, target_cell=BLIND_CELL,
+                            fault_magnitude=float(mag), current_a=WINDOW, mismatch=REALISTIC_MISMATCH)
+        for v, f in verdict_distribution(run_trials(sc, 120, seed=SEED)).items():
+            fractions[v][i] = f
+    x = 100 * np.abs(mags)
+    bottom = np.zeros(len(mags))
+    for v in VerdictKind:
+        colour, name = STYLE[v]
+        ax.fill_between(x, bottom, bottom + fractions[v], color=colour, alpha=0.85,
+                        label=name, step="mid")
+        bottom = bottom + fractions[v]
+    ax.set(xlabel=f"|{label} fault| (%)", ylim=(0, 1), title=f"{label} under mismatch")
+    ax.margins(x=0)
+axes[0].set_ylabel("fraction of trials")
+axes[1].legend(fontsize=7, loc="center left", framealpha=0.9)
+plt.show()
+"""),
+    md("""
+---
+## 4. The number that says calibration worked
+
+A **harmful overclaim** is a DIAGNOSE whose confident interval misses the truth. Under mismatch
+the variance-only observer commits them constantly — it diagnoses a capacity fault that is
+almost entirely its own model error. Turning on the bias gate converts exactly those into
+refusals, driving the harmful-overclaim rate toward zero. That is the whole point of the gate,
+and it costs diagnoses AstraCell should never have made.
+"""),
+    code("""
+print(f"{'fault':>9s} {'gate OFF overclaim':>19s} {'gate ON overclaim':>18s}")
+labels = [("R0", ParamKind.R0), ("capacity", ParamKind.CAPACITY)]
+before, after = [], []
+for label, kind in labels:
+    off = abstention_metrics(run_trials(build_scenario(
+        name="off", fault_kind=kind, target_cell=BLIND_CELL, current_a=WINDOW,
+        mismatch=REALISTIC_MISMATCH, use_bias_gate=False), 250, seed=SEED))
+    on = abstention_metrics(run_trials(build_scenario(
+        name="on", fault_kind=kind, target_cell=BLIND_CELL, current_a=WINDOW,
+        mismatch=REALISTIC_MISMATCH, use_bias_gate=True), 250, seed=SEED))
+    before.append(off.harmful_overclaim_rate)
+    after.append(on.harmful_overclaim_rate)
+    print(f"{label:>9s} {off.harmful_overclaim_rate:19.2%} {on.harmful_overclaim_rate:18.2%}")
+
+fig, ax = plt.subplots(figsize=(5.6, 4.0))
+x = np.arange(len(labels))
+ax.bar(x - 0.2, before, 0.4, color="#c62828", label="variance-only (gate off)")
+ax.bar(x + 0.2, after, 0.4, color="#1565c0", label="bias-aware (gate on)")
+ax.set(xticks=x, xticklabels=[label for label, _ in labels], ylabel="harmful overclaim rate",
+       ylim=(0, 1.05), title="The model-bias gate turns overclaims into refusals.")
+ax.legend(fontsize=8); ax.grid(alpha=0.3, axis="y")
+plt.show()
+"""),
+    md("""
+---
+## What this notebook validated, and what it did not
+
+**Validated (synthetically, on this model):**
+
+- The maximum-likelihood estimator *attains* the Cramér–Rao bound under a matched model —
+  coverage tracks nominal. The bound is not just a bound; it is reached.
+- Under model mismatch the variance-only interval is overconfident to the point of never
+  covering, and the model-bias gate converts the resulting overclaims into refusals.
+- More data shrinks the variance and leaves the bias untouched, exactly. Confidence and
+  credibility come apart, and only confidence responds to sample size.
+
+**Not validated, and not claimable:**
+
+- Anything about a **real battery**. The plant is a hand-built intermediate model, so this is a
+  *lower bound* on how wrong the observer is, not a measurement of it.
+- Calibration under a mismatch we did not write. The bias gate is only as good as the plant we
+  guessed; a different structural error would need its own accounting.
+- That the thresholds (2σ, 5σ) or the AR(1) noise or the known-current assumption are right.
+  Those remain conventions and idealisations, as `LIMITATIONS.md` records.
+
+Calibration made several of AstraCell's numbers *worse* — the capacity diagnosis it once made
+confidently is now refused, and correctly. That is the result. A system that abstains when it
+should is not a weaker diagnostic; it is the only kind worth trusting.
+
+Full accounting: [`docs/CALIBRATION.md`](../docs/CALIBRATION.md) and
+[`LIMITATIONS.md`](../LIMITATIONS.md).
+"""),
+]
+
+
+def write_notebook(path: Path, cells: list[dict]) -> None:
     notebook = {
-        "cells": CELLS,
+        "cells": cells,
         "metadata": {
             "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
             "language_info": {"name": "python", "version": "3.11"},
@@ -458,10 +704,15 @@ def main() -> None:
         "nbformat": 4,
         "nbformat_minor": 5,
     }
-    NOTEBOOK.parent.mkdir(parents=True, exist_ok=True)
-    NOTEBOOK.write_text(json.dumps(notebook, indent=1) + "\n", encoding="utf-8")
-    n_code = sum(c["cell_type"] == "code" for c in CELLS)
-    print(f"wrote {NOTEBOOK} ({len(CELLS)} cells, {n_code} code)")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(notebook, indent=1) + "\n", encoding="utf-8")
+    n_code = sum(c["cell_type"] == "code" for c in cells)
+    print(f"wrote {path} ({len(cells)} cells, {n_code} code)")
+
+
+def main() -> None:
+    write_notebook(NOTEBOOK_01, CELLS_01)
+    write_notebook(NOTEBOOK_02, CELLS_02)
 
 
 if __name__ == "__main__":

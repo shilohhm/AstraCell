@@ -246,9 +246,13 @@ qualitative statement only — see limitation 1.
 - No real fault has been detected.
 - No public dataset has been ingested.
 - No claim in this repository has been validated against anything but itself.
-- No CRLB has been shown to be *attainable*. `bias.pseudo_true_bias` implements a damped
-  Gauss–Newton estimator, but only to locate the pseudo-true parameter under noiseless
-  data. Nobody has run an estimator on noisy data and compared its scatter to the bound.
+
+This section used to add a fifth line: *"No CRLB has been shown to be attainable… nobody has run
+an estimator on noisy data and compared its scatter to the bound."* **That is now done** — see
+§13 and `observability.estimator`. A Gauss–Newton fit's scatter matches `sqrt(CRLB)` and its
+coverage tracks nominal under a matched model. But the estimator runs against the *synthetic*
+plant, so it shows the bound is attainable *for this model*, not that this model is a battery.
+The first four lines above still stand, and they are the ones that matter.
 
 This section used to end: *"the correct next step is to inject faults with a **higher-fidelity
 model** than the one the observer assumes, so that model mismatch is part of the experiment.
@@ -383,3 +387,69 @@ unboundedly more confident and no less wrong the more data you feed it.**
 with no thermocouple was never diagnosable, and adding model bias to a hypothesis that was
 already refused changes nothing. Where AstraCell was silent, it remains correctly silent.
 Where it was *confident*, it was sometimes confidently wrong, and now it says so.
+
+---
+
+## 13. Calibration proves self-consistency, not truth
+
+§12 priced the model error on one example. `calibration/` asks whether that was luck: across
+thousands of repeated experiments with a *known injected fault*, do AstraCell's intervals and
+verdicts mean what they claim? The answer is yes under a matched model and no under mismatch —
+which is exactly what should happen, and the first time this repository has *measured* it rather
+than argued it. `examples/05_calibrated_abstention.py` and `docs/CALIBRATION.md` carry the full
+result. What follows is what it does **not** establish.
+
+### 13a. There is now an estimator, and it is load-bearing
+
+Everything before v0.2 was a property of the design; coverage needs a decision on realised data.
+`observability.estimator` supplies the smallest honest one. Two consequences for how to read the
+numbers:
+
+- The **matched-model coverage** result (the MLE attains the CRLB) is genuine but uses the
+  `fit_gauss_newton` estimator, which is a *fixed-information* M-estimator, not the exact Newton
+  MLE. Its scatter matches the CRLB up to the model's curvature — measured at ~6% on the demo
+  fault, not zero. At larger faults the linearisation degrades in a direction coverage would
+  reveal but a point estimate would not.
+- The **mismatch coverage** results use the exact linear-Gaussian `fit_linear`, whose own
+  curvature bias (~0.1%) is three orders of magnitude below the structural bias under study
+  (~30%), so it does not contaminate the conclusion. The two estimators are used where each is
+  most defensible; mixing them is deliberate, not sloppy, and is stated in the example.
+
+### 13b. "Calibrated" is conditional on the mismatch we wrote
+
+The bias gate is exactly as good as the plant we guessed. The coverage curves show the
+variance-only interval undercovering and the bias-aware gate refusing — but *the bias it gates
+on is computed against `REALISTIC_MISMATCH`*. A structural error of a different shape (a degraded
+cell, a chemistry the ECM mismodels differently, a cell-specific rather than pack-global fault —
+see §12d) would produce a different bias, and might not be gated at all. Calibration under a
+mismatch you did not write is not tested and cannot be, synthetically.
+
+### 13c. The metrics encode choices
+
+- **Harmful overclaim** is defined as a DIAGNOSE whose *variance-only* interval misses the truth
+  at 95%. That flags R0 diagnoses whose magnitude is biased past a tight interval even though the
+  fault is real — arguably harsh, since the existence claim is correct. The definition is
+  deliberately strict (an interval that misses is an interval that lied), but a different cost
+  model would count differently.
+- **Coverage** is two-sided and Gaussian (`two_sided_z` via the normal quantile). The estimator's
+  finite-sample distribution is not exactly Gaussian, so coverage at the extreme levels (99%)
+  leans on a tail the Monte Carlo samples thinly.
+- Everything is measured at seed 0 on a 2×2 pack over 600 s. The *shape* of every result is the
+  claim; the specific percentages move with pack, window, and seed.
+
+### 13d. What it genuinely establishes
+
+Set against those caveats, three things are now measured facts about the code, not hopes:
+
+1. The noise model, whitening, and interval arithmetic are mutually consistent — the sampled
+   noise whitens to white, and matched-model coverage is nominal to sampling error. The AR(1)
+   whitening bug of §2a could not survive this test.
+2. Under mismatch the variance-only interval undercovers to the point of *never* covering, and
+   more data does not fix it: the estimate cloud tightens onto the pseudo-true value at a fixed
+   offset from the truth. The central claim of §12 is now a frequency, not an anecdote.
+3. The model-bias gate reduces the harmful-overclaim rate to zero on the parameter whose model
+   error is fatal (capacity: 100% → 0%), by refusing. Refusal is doing measurable work.
+
+None of that is a statement about a battery. It is a statement that AstraCell is honest about the
+model it assumes and measurably stops overclaiming when that model is wrong. Whether the model
+resembles a cell remains the unproven question at the centre of every section above.

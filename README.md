@@ -346,6 +346,52 @@ confidently wrong — and now it says so. See [`LIMITATIONS.md` §12](LIMITATION
 what §9 itself is not: the plant is four hand-chosen terms, so this is a **lower bound on how
 wrong we are**, not a measurement of it.
 
+### 10. The verdicts are calibrated — and calibration makes them worse
+
+`python examples/05_calibrated_abstention.py`. Everything above is one convincing example.
+This asks whether the verdicts mean what they claim across *thousands* of repeated experiments
+with a known injected truth: does a 90% interval cover 90% of the time? To ask that at all,
+v0.2 adds the one thing the repository never had — an **estimator** (`observability.estimator`),
+which fits the ECM observer to noisy data and turns each realisation into an estimate and a
+verdict. v0.0–v0.1 was an identifiability oracle; v0.2 wraps a detector around it purely to
+audit its confidence.
+
+**Under a matched model the maximum-likelihood interval covers at its nominal rate** — the
+first evidence in this repo that the Cramér–Rao bound is *attained*, not just asserted. **Under
+mismatch the variance-only interval covers essentially never:**
+
+| nominal confidence | 50% | 80% | 90% | 95% | 99% |
+|---|---|---|---|---|---|
+| matched (MLE) | 54% | 80% | 91% | 96% | 99% |
+| mismatched, variance-only | 0% | 0% | 0% | 0% | 0% |
+| mismatched, bias-aware interval | 0% | 100% | 100% | 100% | 100% |
+
+![coverage vs nominal](reports/figures/calibration_coverage.png)
+
+The variance-only observer is not slightly optimistic; it is certain and wrong. Widening the
+interval to admit the bias restores coverage only above 80%, and only by becoming ~60% wide.
+
+And the reason no amount of data fixes it — the central claim of the whole project, now a
+frequency rather than an anecdote:
+
+![more data buys precision, not accuracy](reports/figures/calibration_snr_vs_samples.png)
+
+Repeat the experiment 10 000×: variance-only SNR climbs to 1281σ while the estimate cloud
+tightens by 100× onto **−35.5%** (the pseudo-true value) and never approaches the −5% truth.
+The bias-aware SNR saturates at **0.17σ** and stops dead.
+
+The payoff is the *harmful-overclaim rate* — a DIAGNOSE whose confident interval misses the
+truth. The model-bias gate turns those into refusals: on the capacity fault it drops the
+overclaim rate from **100% to 0%**. (On R0, whose bias is small, it stays at 18% — the gate
+widens uncertainty for the parameter the model gets badly wrong, and honestly cannot repair one
+it gets slightly wrong everywhere.)
+
+**Calibration made several of AstraCell's numbers worse.** The capacity fault it diagnosed at
+32.6σ is now refused, correctly, because 30 of those sigmas were the observer's own model error.
+That is not a regression — it is the only kind of diagnostic worth trusting. Full accounting,
+and the line between what is validated and what is merely synthetic, in
+[`docs/CALIBRATION.md`](docs/CALIBRATION.md).
+
 ---
 
 ## Install and run
@@ -364,12 +410,14 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/02_noise_robustness.py` | relaxes the white-noise and known-current assumptions |
 | `python examples/03_next_best_test.py` | ranks what to measure next; refuses when nothing suffices |
 | `python examples/04_model_mismatch.py` | prices the observer's own model error |
-| `python -m pytest` | 175 tests, ~90 s |
+| `python examples/05_calibrated_abstention.py` | are the verdicts calibrated across repeated trials? |
+| `python -m pytest` | 185 tests, ~2 min |
 | `python -m pytest -m "not regression"` | skip the findings-pinning tests |
 | `python -m ruff check src tests examples` | lint |
 | `python -m mypy` | type-check `src/` |
-| `python scripts/build_notebook.py` | regenerate the notebook |
-| `jupyter lab notebooks/01_identifiability_study.ipynb` | the full study |
+| `python scripts/build_notebook.py` | regenerate both notebooks |
+| `jupyter lab notebooks/01_identifiability_study.ipynb` | the identifiability study |
+| `jupyter lab notebooks/02_calibrated_abstention.ipynb` | the calibration study |
 
 `make help` lists the same targets (`make check` = lint + typecheck + test).
 
@@ -439,7 +487,7 @@ src/astracell/
   cell/         ocv.py · ecm.py · thermal.py        first-order Thevenin + lumped thermal
   pack/         topology.py · params.py · simulate.py   4x8 grid, exact SOC/RC, Euler thermal
   duty/         profiles.py                          constant · pulse · random walk · rest+pulse
-  sensors/      topology.py · noise.py               <- the observability bottleneck
+  sensors/      topology.py · noise.py · sampling.py   <- the observability bottleneck; AR(1) draws
   faults/       library.py · injector.py             physical faults vs sensor faults
   observability/
     sensitivity.py    central differences; per-cell params + a global current-bias nuisance
@@ -448,17 +496,21 @@ src/astracell/
     detectability.py  the (excitation x magnitude) heatmap
     experiment.py     <- what to measure next. Ds-optimal, and greedy sequential planning.
     bias.py           <- structural bias. The error the CRLB cannot see.
+    estimator.py      <- an estimator, at last: fits the observer to noisy data.
     decision.py       <- the refusal. Three gates, and a recommendation.
   plant/        mismatch.py · simulate.py   a battery richer than the model we fit to it
+  calibration/  scenario.py · montecarlo.py · metrics.py   are the verdicts calibrated?
   viz/          packmap.py · heatmap.py
 
 examples/01_first_demo.py                   the whole thesis, six acts
 examples/02_noise_robustness.py             the honesty pass: which claims survive 1/f noise
 examples/03_next_best_test.py               optimal experiment design; the refusal of last resort
 examples/04_model_mismatch.py               what the Cramer-Rao bound cannot see
-notebooks/01_identifiability_study.ipynb    generated by scripts/build_notebook.py
-tests/        physics invariants (hypothesis) · faults · sensors · observability
-              · noise correlation · experiment design · model mismatch
+examples/05_calibrated_abstention.py        are the verdicts calibrated across repeated trials?
+notebooks/*.ipynb                           generated by scripts/build_notebook.py
+docs/CALIBRATION.md                         what v0.2 validates, and what it only simulates
+tests/        physics invariants (hypothesis) · faults · sensors · observability · noise
+              correlation · experiment design · model mismatch · calibration
 LIMITATIONS.md                              written before the code. Read it. It is now
                                             partly a record of claims this repo got wrong.
 ```
@@ -488,7 +540,7 @@ never measured.
 
 ## Tests
 
-175 tests. They assert **theorems**, not observed numbers — a test that hard-codes "the SNR
+185 tests. They assert **theorems**, not observed numbers — a test that hard-codes "the SNR
 is 149" is a test of the OCV curve, not of the code, and would break the moment the
 stand-in curves are replaced with real ones, which is the plan.
 
@@ -510,21 +562,34 @@ stand-in curves are replaced with real ones, which is the plan.
   statistical; the code can tell them apart.
 - the linearised bias predicts where a real damped Gauss–Newton fit of the observer to the
   plant comes to rest, with the error falling as `O(mismatch)` — 45% → 0.4% over a 300× range
+- the estimator **attains the CRLB**: a Gauss–Newton fit's scatter matches `sqrt(CRLB)` and its
+  coverage tracks nominal under a matched model — the first check that the bound is *reachable*
+- the sampled AR(1) noise **whitens to white**, so `Σ_sample == Σ_FIM` and coverage is measured
+  against the right matrix; under mismatch the variance-only interval provably *undercovers*
+- the model-bias gate **reduces the harmful-overclaim rate** on a pinned scenario, and every
+  verdict kind — including all three refusals — is reachable and counted
 - `crlb()` returns `inf` for perfectly collinear parameters (where `pinv` would lie)
 - `VIF ≥ 1` always; `VIF == 1` exactly for an orthogonal design
 - fault injection never mutates the ground truth
-- one test marked `regression` pins a *finding* on one configuration, and says so
+- Monte Carlo trials are **bit-for-bit deterministic** under a seed
+- two tests marked `regression` pin a *finding* on one configuration, and say so
 
 ## Status
 
-This is the **first technical scaffold**. It answers *"what is identifiable?"* and nothing
-else. There is no detector, no estimator, no residual bank, no classifier, no uncertainty
-calibration, no real data, no dashboard, and no LLM. Those come after — and only for the
-faults this layer says are worth chasing.
+Built in three passes. **v0.0** answered *"what is identifiable?"* — the Fisher/CRLB machinery,
+the grey-cell map, the refusal. **v0.1** added the **model-mismatch gate** (§9): a
+higher-fidelity plant, the structural bias `b = FIM⁻¹Sᵀ Σ⁻¹ r`, and `REFUSE_MODEL_BIAS`.
+**v0.2** added **calibrated abstention** (§10): an estimator, a Monte Carlo harness, and the
+coverage/overclaim numbers that show the verdicts hold up as frequencies — and that the
+variance-only ones do not, under mismatch.
 
-The next honest step is to inject faults with a **higher-fidelity model** than the observer
-assumes (PyBaMM DFN with degradation submodels), so that model mismatch becomes part of the
-experiment rather than an unmeasured assumption. See [`LIMITATIONS.md`](LIMITATIONS.md) §10.
+There is still no residual bank, no classifier, no real data, no dashboard, and no LLM. Those
+come after — and only for the faults this machinery says are worth chasing, and can be trusted.
+
+The next honest step is the one v0.1 deferred: replace the hand-built intermediate plant with a
+**PyBaMM DFN** (with degradation submodels), so the mismatch being priced is a real
+electrochemical one rather than four plausible terms. See [`LIMITATIONS.md`](LIMITATIONS.md)
+§10 and §12, and [`docs/CALIBRATION.md`](docs/CALIBRATION.md) §5.
 
 ## License
 

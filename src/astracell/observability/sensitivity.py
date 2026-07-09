@@ -151,6 +151,29 @@ def _step_size(spec: ParameterSpec, eps_relative: float, eps_current_a: float) -
     return eps_current_a if spec.kind is ParamKind.CURRENT_BIAS else eps_relative
 
 
+def apply_perturbations(
+    params: PackParams,
+    current_a: FloatArray,
+    specs: tuple[ParameterSpec, ...],
+    deltas: FloatArray,
+) -> tuple[PackParams, FloatArray]:
+    """Apply a whole deviation vector at once, in each parameter's own units.
+
+    The inverse operation to reading sensitivity columns off ``sensitivities``: physical
+    parameters scale the pack (relative), the current bias shifts the recorded current
+    (amps). Used by the estimator to evaluate the observer at ``theta_nominal + delta``.
+    """
+    deltas = np.asarray(deltas, dtype=float)
+    if deltas.shape != (len(specs),):
+        raise ValueError(f"deltas has shape {deltas.shape}, expected ({len(specs)},)")
+    perturbed_params, perturbed_current = params, np.asarray(current_a, dtype=float)
+    for spec, delta in zip(specs, deltas, strict=True):
+        perturbed_params, perturbed_current = _perturbed(
+            perturbed_params, perturbed_current, spec, float(delta)
+        )
+    return perturbed_params, perturbed_current
+
+
 def _perturbed(
     params: PackParams, current_a: FloatArray, spec: ParameterSpec, delta: float
 ) -> tuple[PackParams, FloatArray]:
