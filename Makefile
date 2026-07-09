@@ -1,22 +1,26 @@
-.PHONY: help install test lint fmt typecheck demo notebook figures check clean
+.PHONY: help install install-pybamm test lint fmt typecheck demo notebook figures check clean
 
 PY ?= .venv/Scripts/python.exe   # on Linux/macOS: make PY=.venv/bin/python
 
 help:
-	@echo "install    create venv and install astracell with dev extras"
-	@echo "test       run the test suite"
-	@echo "lint       ruff check"
-	@echo "fmt        ruff format"
-	@echo "typecheck  mypy over src/"
-	@echo "demo       run examples/01_first_demo.py, writing reports/figures/"
-	@echo "notebook   regenerate notebooks/01_identifiability_study.ipynb"
-	@echo "figures    alias for demo"
-	@echo "check      lint + typecheck + test  (what CI runs)"
+	@echo "install         create venv and install astracell with dev extras"
+	@echo "install-pybamm  add the optional PyBaMM plant (for example 06 / notebook 03)"
+	@echo "test            run the test suite (external-plant tests skip without PyBaMM)"
+	@echo "lint            ruff check"
+	@echo "fmt             ruff format"
+	@echo "typecheck       mypy over src/"
+	@echo "demo            run examples/01_first_demo.py, writing reports/figures/"
+	@echo "notebook        regenerate all notebooks under notebooks/"
+	@echo "figures         alias for demo"
+	@echo "check           lint + typecheck + test  (what CI runs)"
 
 install:
 	python -m venv .venv
 	$(PY) -m pip install --upgrade pip
 	$(PY) -m pip install -e ".[dev,notebook]"
+
+install-pybamm:
+	$(PY) -m pip install -e ".[pybamm]"
 
 test:
 	$(PY) -m pytest

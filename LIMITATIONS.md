@@ -421,8 +421,13 @@ The bias gate is exactly as good as the plant we guessed. The coverage curves sh
 variance-only interval undercovering and the bias-aware gate refusing — but *the bias it gates
 on is computed against `REALISTIC_MISMATCH`*. A structural error of a different shape (a degraded
 cell, a chemistry the ECM mismodels differently, a cell-specific rather than pack-global fault —
-see §12d) would produce a different bias, and might not be gated at all. Calibration under a
-mismatch you did not write is not tested and cannot be, synthetically.
+see §12d) would produce a different bias, and might not be gated at all.
+
+> **v0.3 update.** §14 relaxes this one step: the gate is now tested against a mismatch we did
+> *not* write — a PyBaMM cell's diffusion — and it still refuses. That is a mismatch we did not
+> *design*, but it is still a *synthetic* one; PyBaMM is a model, not a cell. Calibration under a
+> mismatch you did not write is now tested; calibration against a *real* cell still cannot be,
+> synthetically.
 
 ### 13c. The metrics encode choices
 
@@ -453,3 +458,54 @@ Set against those caveats, three things are now measured facts about the code, n
 None of that is a statement about a battery. It is a statement that AstraCell is honest about the
 model it assumes and measurably stops overclaiming when that model is wrong. Whether the model
 resembles a cell remains the unproven question at the centre of every section above.
+
+## 14. The external plant is still a model, not a cell
+
+§13b named the sharpest limit of the calibration work: the bias gate was only ever tested against
+`REALISTIC_MISMATCH`, *a plant we wrote*. v0.3 closes that specific gap and no other. The data now
+comes from a **PyBaMM** SPMe single cell — electrolyte and particle diffusion the first-order ECM
+cannot express, a gap we did not design. `examples/06_external_plant_gate.py`,
+`tests/test_external_plant.py`, and `docs/EXTERNAL_PLANT.md` carry the result; what follows is what
+it still does not establish.
+
+### 14a. It is external mismatch, not external truth
+
+PyBaMM is a sophisticated *model*, not a measured battery. v0.3 swaps a simple synthetic plant for
+a complex one; it introduces no real cell. Everything §1 says about the models being stand-ins
+still holds — SPMe is a better stand-in than the ECM, that is all. This is not EV validation, not
+even bench validation: one cell, one parameter set (Chen2020), one duty cycle, isothermal, no
+ageing, no pack. The claim is narrow on purpose: AstraCell's abstention behaves correctly when the
+data-generating model is richer than the observer. Whether the observer is right about a *physical*
+cell is untouched.
+
+### 14b. The result is stronger and worse than v0.1's, which is the point
+
+Against our own `REALISTIC_MISMATCH`, capacity carried a ~30% structural bias. Against PyBaMM the
+same observer, on a **healthy** cell, reports a **−67.6% ± 0.145%** capacity deviation — 466σ from
+the truth of zero — and diagnoses a fault that does not exist in 100% of ungated trials. The bias
+gate refuses all of them (harmful overclaim 100% → 0%). The self-consistency control (an
+ECM-generated trace through the same pipeline) covers at nominal to within 0.011, so the collapse
+is the plant's mismatch and not a harness bug. That AstraCell looks *worse* against a more faithful
+plant, and responds by refusing, is the honest outcome, not a regression.
+
+### 14c. The phantom fault's magnitude is not robust — only the refusal is
+
+The −67.6% is not a property of the cell. It swings from **+114% to −68%**, changing sign, as the
+mean C-rate changes, and runs from **−94% to +5%** as the observer's fixed RC branch is retuned
+toward the diffusion timescale (`docs/EXTERNAL_PLANT.md` §3d). Its instability *is* the evidence
+that it is model mismatch rather than capacity loss. An earlier draft of `calibration/external.py`
+asserted the bias was "robust to the R1/C1 choice"; measurement falsified that, and the claim was
+retracted in the code and here. What survives every excitation and every RC tuning is the
+*inequality* — bias exceeds the CRLB σ by more than 30× — so the variance-only interval overclaims
+and the gate refuses in all cases. Quote the direction, never the number.
+
+### 14d. Deliberately out of scope for v0.3
+
+Capacity is the only target, because it is the only quantity the ECM and PyBaMM share a truth about
+(a healthy cell's deviation is exactly zero); `R0` and `hA` have no such clean external ground truth
+and are not assessed. No degradation is injected — the mismatch is entirely the model-order gap on a
+sound cell, and PyBaMM-side ageing is deferred. PyBaMM is an optional dependency: the core repo
+stays numpy-only and the whole external-plant suite skips cleanly without it, so nothing above is
+part of the guarantee the base install makes. The next honest step is the one every version has
+pointed at — a *measured* pseudo-OCV and pulse response — which no simulation, however faithful,
+can stand in for.

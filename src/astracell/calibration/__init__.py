@@ -15,6 +15,14 @@ Pipeline::
     build_scenario  ->  prepare  ->  run_trials  ->  {coverage, abstention_metrics, ...}
 """
 
+from astracell.calibration.external import (
+    build_external_observer,
+    constant_profile,
+    external_scenario,
+    observer_voltage,
+    prepare_external,
+    pulse_profile,
+)
 from astracell.calibration.metrics import (
     NOMINAL_LEVELS,
     AbstentionMetrics,
@@ -48,11 +56,17 @@ __all__ = [
     "SampleCountCurve",
     "TrialResults",
     "abstention_metrics",
+    "build_external_observer",
     "build_scenario",
+    "constant_profile",
     "coverage",
     "coverage_curve",
     "covered",
+    "external_scenario",
+    "observer_voltage",
     "prepare",
+    "prepare_external",
+    "pulse_profile",
     "run_trials",
     "sample_count_curve",
     "two_sided_z",

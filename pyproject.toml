@@ -27,6 +27,13 @@ notebook = [
     "jupyterlab>=4.0",
     "nbformat>=5.10",
 ]
+# The external high-fidelity plant (v0.3). Optional on purpose: the whole point is that
+# AstraCell's core -- identifiability, mismatch, calibration -- is numpy-only and does not
+# depend on a full electrochemical solver. Install with `pip install -e ".[pybamm]"` to run
+# examples/06 and the external-plant tests; without it they skip cleanly.
+pybamm = [
+    "pybamm>=25",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/astracell"]
@@ -37,6 +44,7 @@ addopts = "-q --strict-markers"
 filterwarnings = ["error::RuntimeWarning"]
 markers = [
     "regression: pins a finding on one specific configuration, not a universal law",
+    "pybamm: requires the optional PyBaMM dependency; skipped if it is not installed",
 ]
 
 [tool.ruff]
@@ -59,3 +67,9 @@ packages = ["astracell"]
 mypy_path = "src"
 disallow_untyped_defs = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# PyBaMM ships no type stubs and is an optional dependency; the adapter in
+# astracell.plant.pybamm_plant confines the untyped surface to one module.
+module = ["pybamm", "pybamm.*"]
+ignore_missing_imports = true

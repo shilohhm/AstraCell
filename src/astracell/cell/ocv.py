@@ -131,3 +131,59 @@ LFP_LIKE = OcvCurve(
 
 
 CURVES: dict[str, OcvCurve] = {c.name: c for c in (NMC_LIKE, LFP_LIKE)}
+
+
+def ocv_from_table(
+    soc: FloatArray,
+    ocv: FloatArray,
+    *,
+    name: str,
+    chemistry: str,
+    docv_dtemp: float = 0.0,
+) -> OcvCurve:
+    """Build an ``OcvCurve`` from a sampled OCV(SOC) table.
+
+    This is the extension point the module docstring promises: a pseudo-OCV swept slowly from an
+    external cell model (PyBaMM) or a bench, turned into the analytic-ish curve the sensitivity
+    machinery needs. The table must be sorted by ``soc`` and cover the operating window.
+
+    The derivative ``dOCV/dSOC`` is taken from the table by central differences (``np.gradient``)
+    and interpolated, rather than differentiating an interpolating spline: the sensitivities that
+    consume it are already first-order finite differences, so a matched, monotone,
+    non-oscillatory derivative is worth more than a formally smoother one that rings between knots.
+
+    ``docv_dtemp`` is a single entropic coefficient [V/K], defaulting to zero -- an external
+    voltage-only sweep does not measure it, and pretending otherwise would be exactly the kind of
+    invented number this repository exists to avoid. Supply one only if it was measured.
+    """
+    soc = np.asarray(soc, dtype=float)
+    ocv = np.asarray(ocv, dtype=float)
+    if soc.ndim != 1 or soc.shape != ocv.shape:
+        raise ValueError(
+            f"soc and ocv must be matching 1-D arrays, got {soc.shape} and {ocv.shape}"
+        )
+    if soc.size < 4:
+        raise ValueError("need at least 4 points to build an OCV table")
+    order = np.argsort(soc)
+    soc, ocv = soc[order], ocv[order]
+    if np.any(np.diff(soc) <= 0.0):
+        raise ValueError("soc values must be strictly increasing after sorting (no duplicates)")
+
+    slope = np.gradient(ocv, soc)
+
+    def _ocv_ref(z: FloatArray) -> FloatArray:
+        return np.interp(z, soc, ocv)
+
+    def _docv_dsoc(z: FloatArray) -> FloatArray:
+        return np.interp(z, soc, slope)
+
+    def _docv_dtemp(z: FloatArray) -> FloatArray:
+        return np.full_like(z, docv_dtemp)
+
+    return OcvCurve(
+        name=name,
+        chemistry=chemistry,
+        _ocv_ref=_ocv_ref,
+        _docv_dsoc=_docv_dsoc,
+        _docv_dtemp=_docv_dtemp,
+    )
