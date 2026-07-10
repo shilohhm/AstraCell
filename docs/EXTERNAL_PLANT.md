@@ -2,6 +2,16 @@
 
 > Does calibrated abstention survive a plant AstraCell did not write?
 
+> **⚠️ Corrected by v0.4.** Every measurement below reproduces. But the bias gate used here was
+> **degenerate**: `prepare_external` projected the same trace the estimator was about to fit, so its
+> "structural bias" was algebraically equal to the expected estimate, and its credibility statistic
+> was a pure noise statistic with `E[SNR_total²] = 1` for any data whatsoever. The 100%
+> `REFUSE_MODEL_BIAS` in §3c was therefore **unconditional**, not evidence about the cell — point the
+> same gate at a cell with a doubled series resistance and it refuses that too, calling the fault
+> "bias". The headline (variance-only overclaims; the gated system does not) **stands**; the refusal's
+> *meaning* did not, until v0.4 supplied a positive control and an honest gate. Corrections are
+> marked inline. Read [`POSITIVE_CONTROL.md`](POSITIVE_CONTROL.md) §2 with this document.
+
 Every version before this one measured AstraCell against a battery **we built**. v0.0's plant was
 the same ECM the observer fits. v0.1 added `plant.mismatch` — an intermediate model richer than
 the ECM, but its extra terms were four things *we* chose, at magnitudes *we* set. So "the observer
@@ -40,7 +50,7 @@ is drawn per trial on top of a cached trajectory — even DFN would be affordabl
 | Inputs / outputs? | Current profile in, **terminal voltage** out | One cell, one instrumented channel. |
 | Temperature? | **Cut** | PyBaMM's default cell is isothermal, so a temperature channel is a flat line. Voltage only. |
 | Pack scale? | **Cut** | One cell. Pack electrochemistry is explicitly out of scope. |
-| Fault injection? | **Cut** | Not needed. A *healthy* cell already exposes the mismatch (§3), and "healthy" is a truth both models share exactly (deviation = 0). Injecting electrode-level degradation cleanly is deferred. |
+| Fault injection? | ~~**Cut**~~ **This was the mistake.** | The reasoning was: a *healthy* cell already exposes the mismatch (§3), and "healthy" is a truth both models share exactly (deviation = 0). True — and it made the whole experiment a **negative control**, which a system that refuses everything passes. v0.3's gate was such a system. v0.4 injects PyBaMM's own `Contact resistance [Ohm]` (recoverable) and a cathode diffusivity fault (not), and only then does the refusal mean anything. See [`POSITIVE_CONTROL.md`](POSITIVE_CONTROL.md). |
 
 The target is **capacity**, because it is the one quantity the ECM and PyBaMM agree a truth about:
 the cell is healthy, so the honest capacity deviation is **zero**. The observer **shares PyBaMM's
@@ -116,6 +126,14 @@ Without the gate, the observer diagnoses a capacity fault on the healthy cell in
 every excitation**. The bias gate — using the *observable* residual to estimate its own bias —
 converts all of them to `REFUSE_MODEL_BIAS`. Harmful overclaim goes **100% → 0%**.
 
+> **v0.4 correction.** The overclaim numbers stand. The `REFUSE_MODEL_BIAS` label does not: that gate
+> refuses every input, so 100% refusal is arithmetic, not evidence. Re-score the same 0.5C healthy
+> cell with v0.4's honest gate — `lack_of_fit_bias`, which reads only the part of the residual that
+> *no* parameter setting reproduces — and it returns **`WEAK_EVIDENCE` at 3.24σ**, not `REFUSE`.
+> Harmful overclaim is still 0% (`WEAK` is not `DIAGNOSE`), so the row's headline survives. But the
+> true margin is one notch thinner than reported here, and the honest gate captures only **31%** of
+> the bias it is warning about. `POSITIVE_CONTROL.md` §2a and §5.
+
 ### 3d. The honest caveat: the phantom fault's *size* is not robust
 
 Note the phantom fault above swings from **+114% to −68%** and even changes sign as the C-rate
@@ -146,6 +164,19 @@ residual, that its confidence is unwarranted. That is exactly the behaviour v0.1
 now shown to hold against a plant we did not author. Under an honest plant, **AstraCell diagnoses
 less**, and that is the correct direction.
 
+> **v0.4 correction — this section overclaimed.** "It *can* see, from its own fit residual, that its
+> confidence is unwarranted" is false as written. The gate saw nothing. It projected the residual onto
+> the parameter directions, obtained the estimate back, declared the estimate to be bias, and refused.
+> It would have done the same for a sine wave, and it does the same for a doubled series resistance.
+>
+> Diagnosing *less* is only the correct direction if the system can still diagnose *something*. A
+> diagnostic that never fires has a perfect overclaim rate and zero worth, and §3c cannot tell the two
+> apart because it only measures the harm avoided, never the price paid. `detection_metrics` (v0.4)
+> measures both. The corrected claim: with a healthy baseline and the `lack_of_fit_bias` gate, the
+> same machinery **refuses the phantom, recovers a real injected fault at its correct magnitude with
+> nominal coverage, and still refuses a real degradation it cannot express.** That is what this
+> section wanted to say and had not yet earned. [`POSITIVE_CONTROL.md`](POSITIVE_CONTROL.md).
+
 ---
 
 ## 5. What this does *not* prove
@@ -163,4 +194,10 @@ less**, and that is the correct direction.
   observer is right about a *real* cell is a question no simulation can answer, and the next honest
   step — a measured pseudo-OCV and a measured pulse response — is still open.
 
-See `LIMITATIONS.md` §14 for how this fits the ladder of what AstraCell has and has not established.
+- **It is a negative control, and only a negative control.** Nothing here shows AstraCell can find a
+  fault that *is* there. Everything here is consistent with a system that refuses all inputs — and
+  that turned out to be exactly what the external gate was. This is the gap v0.4 closes, and the
+  reason a negative control must never ship without its positive counterpart.
+
+See `LIMITATIONS.md` §14 for how this fits the ladder of what AstraCell has and has not established,
+and §15 for what v0.4 added and corrected.

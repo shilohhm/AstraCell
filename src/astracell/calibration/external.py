@@ -122,6 +122,11 @@ def external_specs() -> tuple[ParameterSpec, ...]:
     return (ParameterSpec(0, ParamKind.R0), ParameterSpec(0, ParamKind.CAPACITY))
 
 
+#: Indices into ``external_specs()``. The fault target is one of these two.
+R0_TARGET: int = 0
+CAPACITY_TARGET: int = 1
+
+
 def external_scenario(
     *,
     name: str,
@@ -132,20 +137,25 @@ def external_scenario(
     noise: NoiseModel | None = None,
     use_bias_gate: bool = True,
     fault_magnitude: float = 0.0,
+    target_index: int = CAPACITY_TARGET,
     temp0_k: float = 298.15,
 ) -> Scenario:
-    """A one-cell, voltage-only, capacity-target scenario whose plant is supplied externally.
+    """A one-cell, voltage-only scenario whose plant is supplied externally.
 
-    ``fault_magnitude`` is the *true* capacity deviation. It defaults to ``0.0`` -- the external
-    cell is healthy -- so coverage asks whether the interval contains zero, and a harmful
-    overclaim is the observer diagnosing a capacity fault on a sound cell.
+    ``fault_magnitude`` is the *true* deviation of the targeted parameter. It defaults to ``0.0``
+    -- v0.3's external cell is healthy -- so coverage asks whether the interval contains zero, and
+    a harmful overclaim is the observer diagnosing a fault on a sound cell. v0.4 injects a real
+    degradation and sets it accordingly; see ``calibration.positive_control``.
+
+    ``target_index`` selects which of ``external_specs()`` carries the hypothesis: ``R0_TARGET``
+    for a series-resistance fault, ``CAPACITY_TARGET`` (the default, and v0.3's) for capacity.
     """
     specs = external_specs()
     return Scenario(
         name=name,
         params=observer,
         specs=specs,
-        target_index=1,  # capacity
+        target_index=target_index,
         fault_magnitude=fault_magnitude,
         current_a=np.asarray(current_a, dtype=float),
         dt_s=dt_s,
@@ -169,7 +179,12 @@ def observer_voltage(scenario: Scenario) -> FloatArray:
     return np.asarray(result.voltage_v[:, 0], dtype=float)
 
 
-def prepare_external(scenario: Scenario, plant_voltage: FloatArray) -> ScenarioContext:
+def prepare_external(
+    scenario: Scenario,
+    plant_voltage: FloatArray,
+    *,
+    baseline_voltage: FloatArray | None = None,
+) -> ScenarioContext:
     """Build the v0.2 ``ScenarioContext`` from an external voltage trace.
 
     ``plant_voltage`` is what some richer plant produced on ``scenario.current_a`` (PyBaMM, or the
@@ -177,11 +192,37 @@ def prepare_external(scenario: Scenario, plant_voltage: FloatArray) -> ScenarioC
     residual projected onto the fitted parameters -- exactly ``observability.bias.parameter_bias``,
     the same estimator v0.2 uses, with the residual now coming from the external plant rather than
     from a hand-built mismatch model.
+
+    **The bias must be measured on a healthy plant, and by default it is not.**
+
+    ``parameter_bias`` of a residual is, by construction, the linear fit to that residual. Omit
+    ``baseline_voltage`` and this function projects the *same* trace the estimator will be fitted
+    to, so ``structural_bias == E[delta_hat]`` exactly and the credibility gate's
+
+        SNR_total = |delta_hat| / sqrt(sigma^2 + b^2)  ==  1     for every dataset,
+
+    yielding ``REFUSE_MODEL_BIAS`` unconditionally -- for a phantom fault, a real fault, or a
+    residual made of sine waves. v0.3 used it this way, correctly, because it only ever ran a
+    healthy cell, whose entire estimate *is* bias. It cannot be used that way on a plant that
+    might be degraded: it would call the degradation "bias" and refuse to see it. This is the
+    trap ``docs/POSITIVE_CONTROL.md`` §2 exists to document, and
+    ``tests/test_positive_control.py::test_the_v03_external_gate_refuses_unconditionally`` pins it.
+
+    Pass ``baseline_voltage`` -- a trace of the *healthy* plant on the same excitation -- and the
+    bias is projected from that instead, restoring v0.2's convention that the residual is
+    evaluated at the healthy nominal while the fault lives in ``plant_output``. The gate then
+    discriminates rather than refuses.
     """
     plant_voltage = np.asarray(plant_voltage, dtype=float)
     n_time = scenario.current_a.size
     if plant_voltage.shape != (n_time,):
         raise ValueError(f"plant_voltage must be shape ({n_time},), got {plant_voltage.shape}")
+    if baseline_voltage is not None:
+        baseline_voltage = np.asarray(baseline_voltage, dtype=float)
+        if baseline_voltage.shape != (n_time,):
+            raise ValueError(
+                f"baseline_voltage must be shape ({n_time},), got {baseline_voltage.shape}"
+            )
 
     fit_ctx = build_context(
         scenario.params,
@@ -205,7 +246,8 @@ def prepare_external(scenario: Scenario, plant_voltage: FloatArray) -> ScenarioC
     # never read, so it stays at the nominal (zero residual there).
     plant_output = output_tensor(plant_voltage[:, None], nominal.temp_k)
     nominal_output = output_tensor(nominal.voltage_v, nominal.temp_k)
-    residual = plant_output - nominal_output
+    bias_source = plant_voltage if baseline_voltage is None else baseline_voltage
+    residual = output_tensor(bias_source[:, None], nominal.temp_k) - nominal_output
 
     bias = parameter_bias(fit_ctx.sens, residual, scenario.topology, scenario.noise, scenario.specs)
     return ScenarioContext(

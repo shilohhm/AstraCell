@@ -5,17 +5,26 @@ decides *what happened*, and this module decides *what to make of it*, so the de
 "coverage" and "harmful overclaim" are here, in one place, arguable and testable, rather than
 smuggled into a plotting script.
 
-Two families of metric, kept distinct on purpose:
+Three families of metric, kept distinct on purpose:
 
 * **Interval calibration** -- does an interval claimed to cover the truth ``L`` of the time do
   so? This is about the *estimate*, independent of any verdict. ``coverage``.
 * **Abstention quality** -- when the observer commits (DIAGNOSE) or declines (REFUSE_*), is it
   right to? This is about the *decision*. ``abstention_metrics``.
+* **Detection quality** -- when a fault really is there, is it found, and found *correctly*?
+  This needs a positive control to be meaningful at all. ``detection_metrics`` (v0.4).
 
 The one number that ties v0.2 to the rest of the repository is the harmful-overclaim rate: a
 trial that DIAGNOSES while its confident interval misses the truth. Under model mismatch the
 variance-only observer does this constantly; the point of the bias gate is to convert those
 into refusals, which is honest even though it lowers the diagnosis rate.
+
+It is also, alone, insufficient. A gate that refuses every input drives harmful overclaim to
+zero and diagnoses nothing -- and v0.3's external gate did exactly that without noticing, because
+nothing in this module could tell the two apart. ``detection_metrics`` is what tells them apart:
+a true positive requires the DIAGNOSE *and* an interval that covers the injected truth *and* the
+right sign. Overclaim measures the harm avoided; true positives measure the price paid for it.
+Report both or neither.
 """
 
 from __future__ import annotations
@@ -197,6 +206,68 @@ def abstention_metrics(
         refuse_model_bias_rate=rate(VerdictKind.REFUSE_MODEL_BIAS),
         harmful_overclaim_rate=float(np.mean(is_diagnose & missed)),
         useful_refusal_rate=float(np.mean(is_model_bias & missed)),
+    )
+
+
+@dataclass(frozen=True)
+class DetectionMetrics:
+    """Positive-control scoring: did the observer find the fault, and was it the right fault?
+
+    ``diagnosis_rate`` counts DIAGNOSE verdicts. ``true_positive_rate`` counts only the ones that
+    *earned* it -- the estimate has the right sign and its confident interval covers the truth.
+    The gap between them is the rate of being **right for the wrong reason**, and it is not small
+    where the phantom is large: v0.4's raw path diagnoses a doubled series resistance at 10.7 sigma
+    while reporting 91.4% against a truth of 100%, an eight-point miss with a 0.12% interval. A
+    diagnostic that names the fault and mis-sizes it by eight sigma has not detected anything.
+
+    Null scenarios (``delta_true == 0``) have no true positives by definition, so every DIAGNOSE
+    is a ``false_positive_rate``. On a null the false-positive and harmful-overclaim rates are
+    *identically equal*: DIAGNOSE demands ``|z| >= 5`` and coverage demands ``|z| <= 1.96``, so no
+    trial can be both. Asserted, not assumed, in ``tests/test_positive_control.py``.
+    """
+
+    n_trials: int
+    delta_true: float
+    coverage_level: float
+    diagnosis_rate: float
+    true_positive_rate: float
+    false_positive_rate: float
+    weak_rate: float
+    refusal_rate: float
+    harmful_overclaim_rate: float
+    coverage: float
+
+    @property
+    def is_null(self) -> bool:
+        return self.delta_true == 0.0
+
+
+def detection_metrics(
+    results: TrialResults,
+    *,
+    coverage_level: float = 0.95,
+) -> DetectionMetrics:
+    """Score one scenario's trials as a detector, against the truth that was injected."""
+    verdicts = np.array([str(v) for v in results.verdicts])
+    is_diagnose = verdicts == str(VerdictKind.DIAGNOSE)
+    is_covered = covered(results, coverage_level, bias_aware=False)
+    truth = results.delta_true
+    null = truth == 0.0
+
+    right_sign = np.sign(results.delta_hat) == np.sign(truth)
+    earned = is_diagnose & is_covered & right_sign
+
+    return DetectionMetrics(
+        n_trials=results.n_trials,
+        delta_true=truth,
+        coverage_level=coverage_level,
+        diagnosis_rate=float(np.mean(is_diagnose)),
+        true_positive_rate=0.0 if null else float(np.mean(earned)),
+        false_positive_rate=float(np.mean(is_diagnose)) if null else 0.0,
+        weak_rate=float(np.mean(verdicts == str(VerdictKind.WEAK_EVIDENCE))),
+        refusal_rate=float(np.mean(np.isin(verdicts, [str(k) for k in _REFUSALS]))),
+        harmful_overclaim_rate=float(np.mean(is_diagnose & ~is_covered)),
+        coverage=float(np.mean(is_covered)),
     )
 
 

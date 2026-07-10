@@ -26,11 +26,12 @@ dev = [
 notebook = [
     "jupyterlab>=4.0",
     "nbformat>=5.10",
+    "nbconvert>=7.0",  # `make notebook-run` executes the notebooks in place
 ]
-# The external high-fidelity plant (v0.3). Optional on purpose: the whole point is that
+# The external high-fidelity plant (v0.3-v0.4). Optional on purpose: the whole point is that
 # AstraCell's core -- identifiability, mismatch, calibration -- is numpy-only and does not
 # depend on a full electrochemical solver. Install with `pip install -e ".[pybamm]"` to run
-# examples/06 and the external-plant tests; without it they skip cleanly.
+# examples 06-07, notebooks 03-04, and the external-plant tests; without it they skip cleanly.
 pybamm = [
     "pybamm>=25",
 ]

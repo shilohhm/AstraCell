@@ -55,15 +55,47 @@ Which is the real asymmetry between the two gates in ``decision``: variance can 
 bias can only be moved. There is no duty cycle for which every ``b`` vanishes at once,
 because the model is wrong and no amount of stirring makes it right.
 
+The in-span part is the estimate, and that is a trap
+----------------------------------------------------
+
+Read the decomposition once more, because a whole version of this repository walked into what
+it implies. The residual's **in-span** part is not merely *indistinguishable* from a parameter
+change; projected through ``FIM^-1 S^T Sigma^-1`` it **is**, bit for bit, the estimate that a
+linear fit to that residual returns. So handing ``parameter_bias(r)`` to the decision layer as
+the bias of a fit against the very same ``r`` sets ``b = E[delta_hat]``, hence
+
+    SNR_total = |delta_hat| / sqrt(sigma^2 + b^2)  ->  1     for any data whatsoever,
+
+and the credibility gate refuses unconditionally, having learned nothing. That is only the
+*right* answer when the truth is known to be zero -- which is precisely the case v0.3's
+``calibration.external.prepare_external`` was written for, and precisely why it does not
+generalise. See ``docs/POSITIVE_CONTROL.md`` §2, and ``prepare_external``'s own docstring.
+
+The escape is that the **out-of-span** part carries information the fit cannot destroy.
+Writing ``P`` for the whitened projector onto the sensitivity columns and ``r`` for the true
+structural residual of an experiment carrying a real fault ``d``,
+
+    (I - P) r  =  (I - P) (y - f(theta*))          because  S d  lies in the span
+
+so the orthogonal residual is **exactly independent of the fault**, and measurable without
+knowing it. It says: *this much of what I see, no setting of my parameters can produce.*
+``lack_of_fit_norm`` returns its whitened length; ``lack_of_fit_bias`` converts that length
+into parameter units. Both are truth-free. Neither bounds the bias -- see below.
+
 Two estimators of the bias, and when to use which
 -------------------------------------------------
 
 ``parameter_bias`` is the formula above: **one** Gauss-Newton step from ``theta*``. It costs
 one plant simulation and one projection, it is exact to first order in the mismatch, and it
-is what the cheap sweeps use.
+is what the cheap sweeps use. It needs a residual evaluated at a **healthy** plant; give it a
+faulted one and it returns the fault, labelled "bias".
 
 ``pseudo_true_bias`` iterates that step to convergence, so it returns ``theta_0 - theta*``
 itself. It costs a dozen simulations. Use it for anything you intend to quote.
+
+``lack_of_fit_bias`` is the one that needs no healthy counterfactual at all, and is therefore
+the only one available against an external plant carrying an unknown fault. It is a **screen,
+not a bound**, and §"How badly it under-warns" below prices that.
 
 The gap between them is not academic. At the mismatch magnitudes in ``REALISTIC_MISMATCH``,
 the linearisation **overstates** the capacity bias by ~29% and **understates** the ``hA``
@@ -94,6 +126,33 @@ Caveats, since the point of the module is to stop overclaiming:
 * The mismatch is pack-global, so its residual is common-mode. A **cell-specific** structural
   error -- one cell whose diffusion branch has degraded -- would not be absorbed by any
   pack-global nuisance, and is not modelled here.
+
+How badly ``lack_of_fit_bias`` under-warns
+------------------------------------------
+
+By Cauchy-Schwarz, a whitened residual of length ``R`` can shift parameter ``i`` by at most
+``R * sigma_i``, and the bound is tight -- attained when the residual aligns with that
+parameter's whitened sensitivity direction. So
+
+    b_lof[i] = || (I - P) r~ || * sigma_i
+
+is "the largest offset the part I cannot explain would produce, had it happened to point at
+this parameter". It is scale-free in the noise: halve every sensor's sigma and ``||r~||``
+doubles while ``sigma_i`` halves. A structural error must not improve when you buy better
+sensors, and this one does not -- the same invariance ``parameter_bias`` has, and it is tested.
+
+What it is not is a bound on the actual bias, which lives in the **in-span** part and is
+unmeasurable without the truth. The screen works only because a model that fails to express a
+change in one subspace usually mis-expresses it in the other. Measured on the one case where
+the truth is known -- v0.3's healthy PyBaMM cell, where the entire ``-67.6%`` capacity estimate
+*is* bias -- ``b_lof`` returns ``20.9%``: it captures **31%** of the structural error it is
+warning about. It caught the overclaim anyway. It would not have caught one three times
+smaller.
+
+And a structural error lying **entirely** in the span leaves ``|| (I-P) r~ || = 0``, so the
+screen passes it silently. That is not a defect of this function. Such an error is, on this
+experiment, indistinguishable from a parameter change by any procedure whatsoever; only a
+different excitation or a richer model can separate them. ``docs/POSITIVE_CONTROL.md`` §5.
 """
 
 from __future__ import annotations
@@ -105,6 +164,7 @@ from astracell.observability.fisher import (
     DEFAULT_LEAK_TOL,
     DEFAULT_RCOND,
     channel_slices,
+    crlb,
     fisher_information,
     whiten_ar1,
 )
@@ -133,6 +193,8 @@ __all__ = [
     "BiasConvergenceError",
     "bias_aware_snr",
     "bias_ceiling",
+    "lack_of_fit_bias",
+    "lack_of_fit_norm",
     "parameter_bias",
     "pseudo_true_bias",
     "residual_score",
@@ -251,6 +313,99 @@ def parameter_bias(
     fim = fisher_information(sens, topology, noise, specs=specs)
     score = residual_score(sens, residual, topology, noise)
     return solve_bias(fim, score, rcond=rcond, leak_tol=leak_tol)
+
+
+def lack_of_fit_norm(
+    sens: FloatArray,
+    residual: FloatArray,
+    topology: SensorTopology,
+    noise: NoiseModel,
+    specs: tuple[ParameterSpec, ...] | None = None,
+    *,
+    rcond: float = DEFAULT_RCOND,
+    leak_tol: float = DEFAULT_LEAK_TOL,
+) -> float:
+    """``|| (I - P) r~ ||``: how much of the residual no parameter setting can produce.
+
+    ``P`` projects onto the whitened sensitivity columns. What survives is the part of the
+    observer's error that is orthogonal to every direction it can move in -- the evidence,
+    available without any counterfactual and without the truth, that the model is wrong about
+    *this* data rather than merely mis-parameterised.
+
+    Independent of any fault the experiment carries, exactly: ``S d`` lies in the span, so
+    subtracting it changes ``P r`` and leaves ``(I - P) r`` alone. That is what makes it usable
+    on an external plant whose degradation is unknown.
+
+    Pure least squares, so ``specs`` may not carry pack-global nuisances: a Gaussian prior makes
+    the estimator MAP rather than a projection, and ``r - S theta_MAP`` is then not orthogonal to
+    the span, which would silently corrupt the norm. Rejected loudly instead.
+
+    Returns ``inf`` when a fitted parameter is unidentifiable -- the span is not well defined,
+    so neither is the complement of its projection.
+    """
+    if specs is not None and any(spec.is_global for spec in specs):
+        raise ValueError(
+            "lack_of_fit_norm is a least-squares projection and admits no prior; "
+            "drop the pack-global nuisances from specs"
+        )
+    if residual.shape[:2] != sens.shape[:2] or residual.shape[2] != sens.shape[2]:
+        raise ValueError(
+            f"residual shape {residual.shape} does not match sensitivity tensor {sens.shape}"
+        )
+
+    fim = fisher_information(sens, topology, noise, specs=specs)
+    score = residual_score(sens, residual, topology, noise)
+    delta = solve_bias(fim, score, rcond=rcond, leak_tol=leak_tol)
+    if not np.all(np.isfinite(delta)):
+        return float("inf")
+
+    # Accumulate ||r~ - S~ delta||^2 group by group. Forming the perpendicular residual
+    # explicitly, rather than ||r~||^2 - score @ delta, avoids catastrophic cancellation
+    # exactly where it matters most: a change the observer *can* express has ||r~|| ~ ||S~ d||,
+    # and the subtractive form would return the difference of two large equal numbers.
+    total = 0.0
+    for index, channel, sigma, rho in channel_slices(topology, noise):
+        whitened_sens = whiten_ar1(sens[:, index, channel, :], rho) / sigma
+        whitened_residual = whiten_ar1(residual[:, index, channel], rho) / sigma
+        perpendicular = whitened_residual - np.einsum("tcp,p->tc", whitened_sens, delta)
+        total += float(np.sum(perpendicular * perpendicular))
+    return float(np.sqrt(total))
+
+
+def lack_of_fit_bias(
+    sens: FloatArray,
+    residual: FloatArray,
+    topology: SensorTopology,
+    noise: NoiseModel,
+    specs: tuple[ParameterSpec, ...] | None = None,
+    *,
+    rcond: float = DEFAULT_RCOND,
+    leak_tol: float = DEFAULT_LEAK_TOL,
+) -> FloatArray:
+    """``|| (I - P) r~ || * sqrt(CRLB)``: the unexplained residual, in parameter units.
+
+    The Cauchy-Schwarz worst case: the largest offset a residual of that whitened length could
+    induce on each parameter, were it aligned with that parameter's sensitivity. Zero when the
+    observer can reproduce the data exactly; unbounded when it cannot see the parameter at all.
+
+    Unlike ``parameter_bias`` this needs no healthy counterfactual, so it is the bias the
+    credibility gate can use against an external plant carrying an unknown fault. Unlike
+    ``parameter_bias`` it is a **screen and not a bound**: it measures the model's error in the
+    directions the estimate does not live in. Read the module docstring's last section before
+    quoting it -- on the one case with known truth it under-warns by 3.2x.
+
+    ``residual`` must be **noiseless** to be a property of the experiment rather than of a draw,
+    matching ``structural_residual``'s convention. Fed a noisy residual it inherits the noise's
+    own ``chi^2(dof)`` contribution, and a deployable estimator must debias it as
+    ``sqrt(max(0, ||.||^2 - dof))``. ``tests/test_positive_control.py`` checks the two agree.
+    """
+    norm = lack_of_fit_norm(sens, residual, topology, noise, specs, rcond=rcond, leak_tol=leak_tol)
+    fim = fisher_information(sens, topology, noise, specs=specs)
+    std = np.sqrt(crlb(fim, rcond=rcond, leak_tol=leak_tol))
+    if not np.isfinite(norm):
+        return np.full(std.shape, np.inf)
+    with np.errstate(invalid="ignore"):
+        return np.asarray(norm * std, dtype=float)
 
 
 def pseudo_true_bias(

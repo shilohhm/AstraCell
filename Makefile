@@ -1,16 +1,17 @@
-.PHONY: help install install-pybamm test lint fmt typecheck demo notebook figures check clean
+.PHONY: help install install-pybamm test lint fmt typecheck demo notebook notebook-run figures check clean
 
 PY ?= .venv/Scripts/python.exe   # on Linux/macOS: make PY=.venv/bin/python
 
 help:
 	@echo "install         create venv and install astracell with dev extras"
-	@echo "install-pybamm  add the optional PyBaMM plant (for example 06 / notebook 03)"
+	@echo "install-pybamm  add the optional PyBaMM plant (for examples 06-07 / notebooks 03-04)"
 	@echo "test            run the test suite (external-plant tests skip without PyBaMM)"
 	@echo "lint            ruff check"
 	@echo "fmt             ruff format"
 	@echo "typecheck       mypy over src/"
 	@echo "demo            run examples/01_first_demo.py, writing reports/figures/"
-	@echo "notebook        regenerate all notebooks under notebooks/"
+	@echo "notebook        regenerate notebook source under notebooks/ (strips outputs)"
+	@echo "notebook-run    execute the notebooks in place, restoring their outputs"
 	@echo "figures         alias for demo"
 	@echo "check           lint + typecheck + test  (what CI runs)"
 
@@ -37,8 +38,13 @@ typecheck:
 demo figures:
 	$(PY) examples/01_first_demo.py
 
+# Writes source-only notebooks. The committed notebooks carry their outputs, so this discards
+# them; follow with notebook-run before committing.
 notebook:
 	$(PY) scripts/build_notebook.py
+
+notebook-run:
+	$(PY) -m jupyter nbconvert --to notebook --execute --inplace notebooks/*.ipynb
 
 check: lint typecheck test
 

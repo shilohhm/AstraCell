@@ -428,6 +428,57 @@ claim was retracted. Under an honest plant AstraCell diagnoses *less* — which 
 The full result, and the four disclaimers it comes with, in
 [`docs/EXTERNAL_PLANT.md`](docs/EXTERNAL_PLANT.md).
 
+**And then §12 found that this gate refused everything.**
+
+### 12. The refusal was unconditional. A positive control caught it.
+
+`python examples/07_external_positive_control.py`. §11 is a **negative control** — a healthy cell,
+correctly not diagnosed — and a negative control is passed by a diagnostic that never diagnoses
+anything. v0.3 shipped one of those.
+
+`prepare_external` projected the very trace the estimator was about to fit, so its "structural bias"
+was algebraically the expected estimate, `b ≡ E[δ̂]`. Substitute that into the credibility statistic:
+
+```
+SNR_total = |b + ε| / sqrt(σ² + b²)        E[SNR_total²] = (b² + σ²)/(σ² + b²) = 1   exactly, any b
+```
+
+**A pure noise statistic.** It knows nothing about the battery. Feed it 20 mV of sine wave: 300/300
+`REFUSE_MODEL_BIAS`. Feed it a 1 V ramp implying a 1718% capacity deviation: 300/300. Feed it a PyBaMM
+cell whose **series resistance has doubled**: 300/300, cheerfully labelling the 91.4% fault "bias".
+Every number in §11 reproduces. Its refusal was arithmetic, not evidence.
+
+So v0.4 injects real faults into PyBaMM and scores AstraCell as a *detector*. A **contact resistance**
+(corroded tab weld) is exactly what an ECM's `R₀` is — the differential is `−ΔR·I` to 3.6 × 10⁻¹⁶ V —
+so it is recoverable in principle. A **cathode diffusivity ×0.3** (particle cracking) is exactly what
+an ECM cannot express, and its true `(R₀, capacity)` deviation is `(0, 0)`.
+
+With a healthy baseline, the phantom subtracts off exactly (baseline subtraction and paired comparison
+are *the same estimator*; the identity holds to 6 × 10⁻¹⁶), at a cost of `√2` in σ. Gate the result on
+the part of the residual **no parameter setting reproduces**, and:
+
+| scenario | true fault | true positive | false positive | refusal |
+|---|---|---|---|---|
+| healthy cell | — | — | **0.00** | 0.95 |
+| weak fault (+0.05 mΩ) | +0.2% R₀ | 0.00 | — | 0.36 (rest: weak) |
+| real fault (+5.00 mΩ) | +20% R₀ | **0.94** | — | 0.00 |
+| confounded (D ×0.3) | none | — | **0.00** | **1.00** |
+
+![finds the fault it can express, refuses the one it cannot](reports/figures/positive_control_rates.png)
+
+**Diagnosis is not detection.** Without the baseline, a doubled series resistance is loud enough to
+clear the phantom's gate — and the observer diagnoses it in *every* trial, reporting **+91.4% against
+a truth of +100%**, an 8.6-point miss inside a 0.23%-wide interval. 145σ of misplaced confidence, and
+a harmful overclaim every time. Scoring only overclaim rewards silence; scoring only diagnosis rewards
+noise.
+
+Three things this does **not** establish, all measured rather than conceded. The honest gate is a
+*screen, not a bound*: on the one case with known truth it captures **31%** of the bias it warns
+about. The confounder's capacity hypothesis is refused at **1.98σ against a 2.00σ threshold** — by one
+percent, and at a 300 s window it is not refused at all. And the baseline here is the *identical
+simulation*, which no workshop can supply, so every rate above is an **upper bound**.
+[`docs/POSITIVE_CONTROL.md`](docs/POSITIVE_CONTROL.md) §5.
+
 ---
 
 ## Install and run
@@ -447,17 +498,25 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/03_next_best_test.py` | ranks what to measure next; refuses when nothing suffices |
 | `python examples/04_model_mismatch.py` | prices the observer's own model error |
 | `python examples/05_calibrated_abstention.py` | are the verdicts calibrated across repeated trials? |
-| `pip install -e ".[pybamm]"` | add the optional external plant (PyBaMM) for example 06 |
+| `pip install -e ".[pybamm]"` | add the optional external plant (PyBaMM) for examples 06-07 |
 | `python examples/06_external_plant_gate.py` | does abstention survive a plant we did not write? |
-| `python -m pytest` | 193 tests, ~2 min (external-plant tests skip without PyBaMM) |
+| `python examples/07_external_positive_control.py` | and when that plant is really broken, does it notice? |
+| `python -m pytest` | 226 tests, ~2 min (external-plant tests skip without PyBaMM) |
 | `python -m pytest -m "not regression"` | skip the findings-pinning tests |
 | `python -m pytest -m "not pybamm"` | skip the tests that need the optional PyBaMM dependency |
 | `python -m ruff check src tests examples` | lint |
 | `python -m mypy` | type-check `src/` |
-| `python scripts/build_notebook.py` | regenerate all three notebooks |
+| `make notebook` | regenerate the four notebooks' source (**strips their outputs**) |
+| `make notebook-run` | execute them in place, restoring the outputs |
 | `jupyter lab notebooks/01_identifiability_study.ipynb` | the identifiability study |
 | `jupyter lab notebooks/02_calibrated_abstention.ipynb` | the calibration study |
 | `jupyter lab notebooks/03_external_plant_gate.ipynb` | the external-plant study (skips without PyBaMM) |
+| `jupyter lab notebooks/04_external_positive_control.ipynb` | the positive control (skips without PyBaMM) |
+
+The notebooks are generated from `scripts/build_notebook.py` but committed *executed*, so they
+render with their figures on GitHub. Edit the builder, never the `.ipynb` — and always follow
+`make notebook` with `make notebook-run` before committing. `tests/test_notebooks.py` enforces both
+halves of that.
 
 `make help` lists the same targets (`make check` = lint + typecheck + test).
 
@@ -535,11 +594,11 @@ src/astracell/
     mask.py           SNR -> {observable, weak, unobservable} -> GreyCellMap
     detectability.py  the (excitation x magnitude) heatmap
     experiment.py     <- what to measure next. Ds-optimal, and greedy sequential planning.
-    bias.py           <- structural bias. The error the CRLB cannot see.
+    bias.py           <- structural bias, and the lack-of-fit screen that needs no counterfactual
     estimator.py      <- an estimator, at last: fits the observer to noisy data.
     decision.py       <- the refusal. Three gates, and a recommendation.
-  plant/        mismatch.py · simulate.py · pybamm_plant.py   richer plants; PyBaMM is optional
-  calibration/  scenario.py · montecarlo.py · metrics.py · external.py   calibrated? even off-model?
+  plant/        mismatch.py · simulate.py · pybamm_plant.py   richer plants + injected PyBaMM faults
+  calibration/  scenario.py · montecarlo.py · metrics.py · external.py · positive_control.py
   viz/          packmap.py · heatmap.py
 
 examples/01_first_demo.py                   the whole thesis, six acts
@@ -548,11 +607,14 @@ examples/03_next_best_test.py               optimal experiment design; the refus
 examples/04_model_mismatch.py               what the Cramer-Rao bound cannot see
 examples/05_calibrated_abstention.py        are the verdicts calibrated across repeated trials?
 examples/06_external_plant_gate.py          does abstention survive a PyBaMM plant we did not write?
-notebooks/*.ipynb                           generated by scripts/build_notebook.py
+examples/07_external_positive_control.py    and when that plant is really broken, does it notice?
+notebooks/*.ipynb                           generated by scripts/build_notebook.py, committed executed
 docs/CALIBRATION.md                         what v0.2 validates, and what it only simulates
 docs/EXTERNAL_PLANT.md                      what v0.3 tests against PyBaMM, and its four disclaimers
+docs/POSITIVE_CONTROL.md                    how v0.4 found that v0.3's gate refused everything
 tests/        physics invariants (hypothesis) · faults · sensors · observability · noise
-              correlation · experiment design · model mismatch · calibration
+              correlation · experiment design · model mismatch · calibration · positive control
+              · notebooks (are they in sync with their generator, and still executed?)
 LIMITATIONS.md                              written before the code. Read it. It is now
                                             partly a record of claims this repo got wrong.
 ```
@@ -582,10 +644,11 @@ never measured.
 
 ## Tests
 
-193 tests (the eight external-plant tests skip cleanly without the optional PyBaMM dependency).
-They assert **theorems**, not observed numbers — a test that hard-codes "the SNR
-is 149" is a test of the OCV curve, not of the code, and would break the moment the
-stand-in curves are replaced with real ones, which is the plan.
+226 tests, of which 212 pass and 14 skip without the optional PyBaMM dependency (measured, not
+asserted: `mv site-packages/pybamm` away and `pytest` still exits 0). They assert **theorems**,
+not observed numbers — a test that hard-codes "the SNR is 149" is a test of the OCV curve, not of
+the code, and would break the moment the stand-in curves are replaced with real ones, which is
+the plan.
 
 - `dV/d(relative R0) == −I·R0` exactly at `t=0`, to machine precision
 - charge conservation, energy balance, `V ≤ OCV` on discharge, monotone cooling at rest
@@ -621,7 +684,7 @@ stand-in curves are replaced with real ones, which is the plan.
 
 ## Status
 
-Built in four passes. **v0.0** answered *"what is identifiable?"* — the Fisher/CRLB machinery,
+Built in five passes. **v0.0** answered *"what is identifiable?"* — the Fisher/CRLB machinery,
 the grey-cell map, the refusal. **v0.1** added the **model-mismatch gate** (§9): a
 higher-fidelity plant, the structural bias `b = FIM⁻¹Sᵀ Σ⁻¹ r`, and `REFUSE_MODEL_BIAS`.
 **v0.2** added **calibrated abstention** (§10): an estimator, a Monte Carlo harness, and the
@@ -630,14 +693,25 @@ variance-only ones do not, under mismatch. **v0.3** added the **external-plant g
 data now comes from a **PyBaMM** cell, and the same abstention logic survives a plant we did not
 write — by refusing to diagnose a 68% phantom fault on a healthy cell.
 
+**v0.4** added the **positive control** (§12), and it found that v0.3's external gate refused
+*everything* — its credibility statistic was pure noise, `E[SNR_total²] = 1` for any data at all.
+Every v0.3 measurement reproduces; the meaning of its refusal did not. With a healthy baseline and
+a gate that reads only what no parameter setting can reproduce, the same machinery now recovers a
+real injected fault at its correct magnitude with nominal coverage, and still refuses a real
+degradation it cannot express — the latter by a **1% margin**, on a screen that captures **31%** of
+the bias it warns about. Worse numbers, and the first ones that mean anything.
+
 There is still no residual bank, no classifier, no real data, no dashboard, and no LLM. Those
 come after — and only for the faults this machinery says are worth chasing, and can be trusted.
 
 v0.3 took the first half of the step v0.1 deferred — a real electrochemical plant (SPMe) instead
-of four plausible terms. The remaining half is the **DFN with degradation submodels** (so an
-*injected* electrochemical fault can be recovered, not just a healthy cell's phantom), and beyond
-any simulation, a **measured** pseudo-OCV and pulse response. See
-[`LIMITATIONS.md`](LIMITATIONS.md) §14, and [`docs/EXTERNAL_PLANT.md`](docs/EXTERNAL_PLANT.md) §5.
+of four plausible terms — and v0.4 took the second: an *injected* electrochemical fault, recovered.
+What remains is capacity fade, which cannot be injected cleanly without giving up the shared-OCV
+control that isolates dynamic mismatch; **DFN with degradation submodels**; and beyond any
+simulation, a **measured** pseudo-OCV and pulse response. Note also that v0.4's baseline is the
+identical simulation, so its detection rates are upper bounds on what any real baseline could
+deliver. See [`LIMITATIONS.md`](LIMITATIONS.md) §15 and
+[`docs/POSITIVE_CONTROL.md`](docs/POSITIVE_CONTROL.md) §5.
 
 ## License
 

@@ -13,9 +13,16 @@ terms. ``docs/CALIBRATION.md`` draws that line precisely.
 Pipeline::
 
     build_scenario  ->  prepare  ->  run_trials  ->  {coverage, abstention_metrics, ...}
+
+v0.4 adds the positive control, because refusal metrics alone cannot distinguish a system that
+declines wisely from one that declines always::
+
+    build_evidence  ->  {prepare_raw, prepare_paired}  ->  run_trials  ->  detection_metrics
 """
 
 from astracell.calibration.external import (
+    CAPACITY_TARGET,
+    R0_TARGET,
     build_external_observer,
     constant_profile,
     external_scenario,
@@ -26,11 +33,13 @@ from astracell.calibration.external import (
 from astracell.calibration.metrics import (
     NOMINAL_LEVELS,
     AbstentionMetrics,
+    DetectionMetrics,
     SampleCountCurve,
     abstention_metrics,
     coverage,
     coverage_curve,
     covered,
+    detection_metrics,
     sample_count_curve,
     two_sided_z,
     verdict_distribution,
@@ -41,6 +50,15 @@ from astracell.calibration.montecarlo import (
     prepare,
     run_trials,
 )
+from astracell.calibration.positive_control import (
+    PairedEvidence,
+    build_evidence,
+    differential_voltage,
+    paired_noise,
+    paired_scenario,
+    prepare_paired,
+    prepare_raw,
+)
 from astracell.calibration.scenario import (
     NOMINAL_FAULT,
     Scenario,
@@ -48,24 +66,35 @@ from astracell.calibration.scenario import (
 )
 
 __all__ = [
+    "CAPACITY_TARGET",
     "NOMINAL_FAULT",
     "NOMINAL_LEVELS",
+    "R0_TARGET",
     "AbstentionMetrics",
+    "DetectionMetrics",
+    "PairedEvidence",
     "Scenario",
     "ScenarioContext",
     "SampleCountCurve",
     "TrialResults",
     "abstention_metrics",
+    "build_evidence",
     "build_external_observer",
     "build_scenario",
     "constant_profile",
     "coverage",
     "coverage_curve",
     "covered",
+    "detection_metrics",
+    "differential_voltage",
     "external_scenario",
     "observer_voltage",
+    "paired_noise",
+    "paired_scenario",
     "prepare",
     "prepare_external",
+    "prepare_paired",
+    "prepare_raw",
     "pulse_profile",
     "run_trials",
     "sample_count_curve",

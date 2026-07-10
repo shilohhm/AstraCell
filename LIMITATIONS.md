@@ -509,3 +509,102 @@ stays numpy-only and the whole external-plant suite skips cleanly without it, so
 part of the guarantee the base install makes. The next honest step is the one every version has
 pointed at — a *measured* pseudo-OCV and pulse response — which no simulation, however faithful,
 can stand in for.
+
+---
+
+## 15. The refusal now discriminates — but only because v0.4 went looking for the bug
+
+v0.3 asked whether AstraCell refuses under an external plant. It does. v0.4 asked the question that
+had to come next, and that v0.3 had no way to ask: **when the external cell really is broken, does
+AstraCell notice?**
+
+### 15a. v0.3's external bias gate was a constant, and nothing in v0.3 could have said so
+
+`calibration.external.prepare_external` projected the very trace the estimator was about to fit, so
+its `structural_bias` was algebraically the expected estimate, `b ≡ E[δ̂]`. Substituting into the
+credibility statistic gives, exactly and for any residual,
+
+```
+SNR_total = |b + ε| / sqrt(σ² + b²)        E[SNR_total²] = (b² + σ²)/(σ² + b²) = 1
+```
+
+**A pure noise statistic, carrying no information about the data.** Whenever the bias exceeds the
+noise — the only regime a bias gate exists for — it concentrates on 1σ and returns
+`REFUSE_MODEL_BIAS` with certainty. Measured: 300/300 refusals on 20 mV of sine wave, on an absurd
+1 V ramp implying a 1718% capacity deviation, and on a PyBaMM cell whose **series resistance has
+doubled**, where it dutifully labels the 91.4% fault "bias".
+
+v0.3's headline results all reproduce. Its `REFUSE_MODEL_BIAS` label was arithmetic, not evidence.
+This is what a negative control cannot catch, and what a positive control catches immediately.
+
+### 15b. The honest gate under-warns by 3.2×, and bounds nothing
+
+The replacement (`observability.bias.lack_of_fit_bias`) reads only the part of the residual that
+**no setting of the observer's parameters reproduces** — the out-of-span component, which is exactly
+independent of any fault present and needs no counterfactual. It is invariant to the noise scale, as
+a structural bias must be.
+
+It is a **screen, not a bound**. The bias lives in the *in-span* part, which is unmeasurable without
+the truth; the screen infers it from the orthogonal part on the assumption that a model wrong in one
+subspace is wrong in the other. On the one case where the truth is known — v0.3's healthy cell, where
+the entire −67.6% estimate *is* bias — it reports 20.9%, capturing **31%** of the error it warns
+about. It caught the overclaim. **It would not have caught one three times smaller.**
+
+And a structural error lying entirely *in* the observer's span leaves the screen at exactly zero. That
+is a theorem about the experiment, not a defect: such a change is indistinguishable from a parameter
+shift by any procedure looking only at this data.
+
+### 15c. The positive control's fault is in the model's span by construction
+
+PyBaMM's `Contact resistance [Ohm]` produces a differential of `−ΔR·I` to **3.6 × 10⁻¹⁶ V**, and the
+ECM's `∂V/∂R₀ = −I` exactly. The paired estimator recovers `+20.0000%` from a 20% injection with zero
+cross-talk onto capacity. That exactness is *what a positive control is*: it proves the pipeline can
+recover a fault the observer can express, and it proves **nothing whatever** about faults it cannot.
+
+The confounder is where the physics is. Cathode diffusivity ×0.3 — real degradation, true
+`(R₀, capacity)` deviation `(0, 0)`, verified by the C/20 shift being linear in current (199 mV/C over
+a 10× range) and hence a vanishing overpotential rather than a capacity loss. The observer reads it as
+a 119% capacity fault at 579σ. The gate refuses. **On the capacity hypothesis it refuses at 1.98σ
+against a 2.00σ threshold — by one percent.** Shorten the window from 600 s to 300 s and the same
+hypothesis reaches 3.35σ and is merely weakened. The margin is real and it is thin, and it is pinned
+as a regression test.
+
+### 15d. The baseline is the assumption, and ours is impossible
+
+Baseline subtraction and paired comparison are the same estimator — the projection is linear, and the
+identity holds to 6 × 10⁻¹⁶. The correction is exact. But the healthy baseline used here is the
+**identical simulation** with the fault parameter at its healthy value: same solver, same grid, same
+initial SOC, same day. A real beginning-of-life fingerprint is none of those. **Every detection rate
+in `docs/POSITIVE_CONTROL.md` is an upper bound on what any real baseline could deliver**, and the
+paired estimator's nominal coverage is a statement about the arithmetic, not about a workshop. Where
+no comparable baseline exists, the honest behaviour is v0.3's — refuse — which is a correct answer,
+not a failure mode, provided nobody mistakes it for discrimination.
+
+The cost of the correction is not zero: two traces means two noise draws, so `σ` widens by exactly
+`√2`.
+
+### 15e. Diagnosis is not detection, and the old metrics could not tell
+
+A system can diagnose a real fault in **every** trial while its interval **never** covers the truth.
+The raw path does exactly this at a doubled series resistance: `DIAGNOSE` at 10.7σ, reporting +91.4%
+against +100%, an 8.6-point miss inside a 0.23%-wide interval — 145σ of misplaced confidence, and a
+harmful overclaim in every trial. `harmful_overclaim_rate` alone rewards silence; `diagnosis_rate`
+alone rewards noise. `detection_metrics` reports both, and scores a true positive only as
+*DIAGNOSE ∧ the interval covers the truth ∧ the sign is right*.
+
+Note the ceiling this imposes: the true-positive rate saturates at **0.94, not 1.00**, because a 95%
+interval misses 5% of the time by construction. Harmful overclaim floors at `1 − coverage_level` for
+any detector that fires at all. v0.3's 0% overclaim came from 0% diagnosis. It is not a number to
+aspire to.
+
+### 15f. Still out of scope for v0.4
+
+Capacity fade is **still not injected**, and cannot be cleanly: `Nominal cell capacity [A.h]` only
+normalises the C-rate and changes no electrode capacity, while real fade (loss of lithium inventory,
+loss of active material) moves the stoichiometry window and hence the OCV–SOC map — which would break
+the shared-pseudo-OCV control that isolates *dynamic* mismatch in the first place. Fixing that means
+giving up the control or fitting the OCV too, and both are larger changes than v0.4 earns.
+
+Also absent: SEI growth, thermal coupling, pack scale, DFN, more than one chemistry parameter set,
+more than one duty cycle, and any measured cell whatsoever. PyBaMM remains a model, the fault remains
+one we injected into it, and the next honest step remains the one every version has pointed at.
