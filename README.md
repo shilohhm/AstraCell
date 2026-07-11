@@ -2,19 +2,20 @@
 
 **A battery diagnostic that knows what it can't see.**
 
-AstraCell determines, from first principles, which battery faults are *identifiable*
-given the battery model, the sensor topology, the measurement noise, and the excitation
-actually present in the data. It refuses to diagnose the rest — and computes what
-additional measurement would change its mind.
+AstraCell determines, from first principles, which battery faults are *identifiable* given
+the battery model, the sensor topology, the measurement noise, and the excitation actually
+present in the data. It refuses to diagnose the rest — and computes what additional
+measurement would change its mind.
 
-> ⚠️ **Read [`LIMITATIONS.md`](LIMITATIONS.md) before believing any number here.**
-> The OCV curves are stand-ins, not fitted cells. Nothing in this repository has ever
-> detected a real fault, or touched a real battery. Every bound below is a statement about
-> *this model*. The repo used to add "and every modelling simplification makes it
-> optimistic" — [§7](#7-the-white-noise-assumption-was-load-bearing) measured that and it is
-> false in both directions at once. What *is* true is that the Cramér–Rao bound never sees
-> the error the model itself is making. [§9](#9-the-crlb-cannot-see-the-error-the-model-itself-is-making)
-> measures that too, and it costs more than everything else here combined.
+> ⚠️ **Read [`LIMITATIONS.md`](LIMITATIONS.md) before believing any number here.** The OCV
+> curves are stand-ins, not fitted cells. **Nothing in this repository has ever detected a
+> real fault, or touched a real battery.** Every bound below is a statement about *this
+> model*, validated against itself and against an external simulator — never against a cell.
+
+**Where to go from here:** the [technical report](docs/TECHNICAL_REPORT.md) is the full
+argument; the [portfolio page](docs/PORTFOLIO.md) is the five-minute version;
+[CLAIMS.md](docs/CLAIMS.md) maps every claim to the evidence that backs it;
+[REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) regenerates every number from a fresh clone.
 
 ---
 
@@ -31,47 +32,47 @@ A production BMS does not measure what you want to diagnose.
 So "highlight the faulty cell on a 3D pack map" is, for thermal faults, undecidable from
 real telemetry. Most battery-diagnostic projects do it anyway.
 
-AstraCell instead computes the **Fisher information matrix** of the pack's parameters
-under the actual sensor topology, and the **Cramér–Rao lower bound** it implies. The CRLB
-bounds the variance of *every unbiased estimator* — not of one algorithm. If it says a
-40% cooling fault sits at 1.2σ, no detector you write will find it, and the honest thing
-to render is grey.
+AstraCell instead computes the **Fisher information matrix** of the pack's parameters under
+the actual sensor topology, and the **Cramér–Rao lower bound** it implies. The CRLB bounds
+the variance of *every* unbiased estimator — not of one algorithm. If it says a 40% cooling
+fault sits at 1.2σ, no detector you write will find it, and the honest thing to render is
+grey.
 
-That argument has a premise: *unbiased*, which means *the model is right*. It is not, and
-[§9](#9-the-crlb-cannot-see-the-error-the-model-itself-is-making) prices the premise. There
-are two ways to be wrong about a battery, and only one of them yields to more data.
+There is no fault classifier here, deliberately. A classifier answers *"which fault?"*.
+AstraCell answers the logically prior question: *"is that question answerable?"* Building the
+classifier first produces a system that is confident exactly where it should be silent.
+
+A second, sharper claim runs through everything: **more data can make a structurally wrong
+answer more certain.** A model wrong in a way the data cannot expose grows *more* confident
+as you feed it more samples — so AstraCell prices its own model bias and refuses when that
+bias dwarfs the signal.
 
 **The grey cells are not painted by a distance-to-sensor rule. They fall out of the
 Cramér–Rao bound.**
 
-There is no fault classifier here, deliberately. A classifier answers *"which fault?"*.
-This answers the logically prior question: *"is that question answerable?"* Building the
-classifier first produces a system that is confident exactly where it should be silent.
+## Three tiers of validation
 
----
+The distinction this project is organised around. A result at one tier never licenses a
+claim at a higher one.
 
-## What the code found
+| Tier | Meaning | Where AstraCell stands |
+|---|---|---|
+| **1 — internal self-consistency and synthetic experiments** | Within AstraCell's own models, plus theorems about the estimator | Extensive |
+| **2 — independently developed external simulator** | Against PyBaMM, a simulator AstraCell did not implement | The phantom-fault refusal and the positive control |
+| **3 — physical battery validation** | A measured cell, a real fault | **None yet — and this is stated, not hidden** |
 
-All numbers below are produced by `python examples/01_first_demo.py` on a 4×8 pack
-(32 cells, 32 voltage channels, 4 thermocouples, 1 current shunt), 1200 s of 1.0C pulse
-excitation at 1 Hz, 1 mV voltage noise and 0.5 K temperature noise.
+## What the evidence shows
 
-> **These numbers assume white measurement noise (`rho = 0`), a perfectly known pack
-> current, and — most importantly — that the observer's model is *correct*.** All three are
-> false. Relaxing the first flips one verdict below ([§7](#7-the-white-noise-assumption-was-load-bearing)).
-> Relaxing the third flips another and caps a third
-> ([§9](#9-the-crlb-cannot-see-the-error-the-model-itself-is-making)): the 5% capacity fault
-> reported below at **32.6σ** is worth **0.27σ** once you admit the ECM is missing a diffusion
-> branch. Every SNR in §§1–8 is **variance-only**. Nothing here is quoted from a previous
-> run — every figure is regenerated by the script.
+Produced by `python examples/01_first_demo.py` on a 4×8 pack (32 cells, 32 voltage
+channels, 4 thermocouples, 1 current shunt), 1200 s of 1.0C pulse excitation, 1 mV / 0.5 K
+noise. These numbers assume white noise and a known current — both are relaxed in the
+[report](docs/TECHNICAL_REPORT.md), and one headline verdict flips when they are.
 
-### 1. Resistance and capacity faults are identifiable everywhere. Cooling faults are not.
-
-| Fault hypothesis | Thermocouple on that cell? | CRLB (1σ) | SNR | Verdict |
+| Fault hypothesis | Thermocouple? | CRLB (1σ) | SNR | Verdict |
 |---|---|---|---|---|
-| `R0` +20% on cell 5 | no | ±0.13% | 149.2σ | **DIAGNOSE** |
-| capacity −5% on cell 17 | no | ±0.15% | 32.6σ | **DIAGNOSE** |
-| cooling −40% on cell 12 | **yes** | ±7.31% | 5.5σ | **DIAGNOSE** |
+| `R0` +20% on cell 5 | no | ±0.13% | **149.2σ** | DIAGNOSE |
+| capacity −5% on cell 17 | no | ±0.15% | **32.6σ** | DIAGNOSE |
+| cooling −40% on cell 12 | **yes** | ±7.31% | **5.5σ** | DIAGNOSE |
 | cooling −40% on cell 10 | no | ±32.4% | **1.2σ** | **REFUSE** |
 
 Cooling faults are identifiable on **4 of 32 cells** — exactly the four carrying a
@@ -79,407 +80,37 @@ thermocouple. The fault on cell 10 is *really there*; AstraCell declines to diag
 
 ![pack map](reports/figures/packmap_cooling.png)
 
-### 2. A thermocouple informs about the cell it sits on, and almost nothing else
-
-Conduction carries too little information to a neighbour. The cell *adjacent* to a
-thermocouple is no better determined than a cell four hops away — it is **worse**,
-because the far cell is a pack corner, and a corner has fewer conduction paths, so it
-warms more for the same `hA` change and reads out more strongly through its own voltage.
-
-| cell | grid distance to nearest thermocouple | SNR (40% cooling fault) |
-|---:|---:|---:|
-| 4 | 0 | **5.88σ** |
-| 3 | 1 | 1.33σ |
-| 9 | 3 | 1.21σ |
-| 0 | 4 | **1.55σ** ← the corner beats the neighbour |
-
-Identifiability is **not monotone in grid distance**. A hop-count heuristic gets this
-exactly backwards. The Fisher information knows about thermal mass, conduction
-anisotropy, boundary effects, excitation, and noise. A hop count knows about none of them.
-
-### 3. Cell voltage is a thermometer — a terrible one
-
-Why is a cooling fault visible *at all* on an uninstrumented cell? Because `R0` is
-Arrhenius in temperature. A cooling fault warms the cell, lowering its resistance, moving
-its voltage. Freeze that coupling (`ea_over_r_k = 0`) and only the far weaker entropic
-`dOCV/dT` pathway survives:
-
-| pathway | voltage-only `hA` bound (1σ) |
-|---|---|
-| `R0(T)` active | ±14.4% |
-| `R0(T)` frozen (entropic only) | ±477% |
-
-This is why the CRLB for `hA` comes back finite-but-enormous rather than infinite, and
-why the *SNR threshold* — not a numerical rank cut — is what declares a cell unobservable.
-
-### 4. Excitation is information, and it can substitute for a sensor
-
-`SNR = magnitude / sqrt(CRLB)`, and the CRLB doesn't depend on the magnitude under a
-local linearisation — so one simulation sweep gives every fault size at once.
-
-Smallest fault visible at 5σ on cell 10 (no thermocouple):
-
-| pulse amplitude | current σ | `R0` fault | cooling fault |
-|---:|---:|---:|---:|
-| 0.05C | 1.3 A | 1.66% | 3303% |
-| 0.94C | 24.4 A | 0.72% | 165% |
-| 2.50C | 65.0 A | 0.31% | **13.0%** |
-
-Heat generation scales as `I²`. A **1.83C pulse makes cell 10's cooling fault observable
-with no new sensor at all.** So "what should I measure next?" has two answers — instrument
-it, or excite it harder — and both fall out of the same Fisher matrix:
-
-```
-Counterfactual sensor placement (no re-simulation, just a row mask):
-  + thermocouple on cell 10  ->  SNR   5.71 sigma      <- the recommendation
-  + thermocouple on cell  9  ->  SNR   1.26 sigma
-  + thermocouple on cell 11  ->  SNR   1.26 sigma
-
-With one extra thermocouple on cell 10:
-  verdict      : DIAGNOSE          (was REFUSE_UNOBSERVABLE)
-  detection SNR: 5.71 sigma        (was 1.24)
-  CRLB (1s)    : +/- 7.01%         (was +/- 32.37%)   -- a 4.6x improvement
-```
-
-### 5. Constant current confounds resistance with capacity
-
-A constant IR offset and a slowly-drifting OCV offset alias. Current *variation* breaks
-the tie. Measured by the variance inflation factor, not the condition number:
-
-| duty cycle | current σ | VIF(`R0`) |
-|---|---:|---:|
-| constant current | 0 A | 4.12 |
-| pulse train | 8 A | 2.04 |
-| pulse train | 39 A | 1.06 |
-
-And once you stop pretending the ammeter is perfect, constant current does not merely
-confound — it collapses. Carrying a pack-global current bias as a nuisance parameter
-(`examples/02_noise_robustness.py`, 97-parameter spec set):
-
-| duty cycle | VIF(`R0`) | VIF(capacity) | VIF(`hA`) | `R0` cost |
-|---|---:|---:|---:|---:|
-| pulse train, 1.0C | 4.4 | 1.6 | 5.1 | ×1.00 |
-| constant current | **195.4** | **261.7** | **161.3** | **×6.50** |
-
-A constant current offset is indistinguishable from every cell being slightly more
-resistive, and from a slow capacity drift. With no excitation there is no way to tell the
-ammeter from the pack. **Excitation buys isolation, not merely precision.**
-
-### 6. LFP is ~6× harder than NMC, and the code knows it
-
-A capacity fault is only visible through `dOCV/dSOC`:
-
-| SOC | NMC-like | LFP-like | ratio |
-|---:|---:|---:|---:|
-| 0.3 | 2.32 mV/% | 0.55 mV/% | 4.2× |
-| 0.5 | 3.38 mV/% | 0.56 mV/% | 6.1× |
-| 0.7 | 5.21 mV/% | 0.94 mV/% | 5.5× |
-
-Same fault. Same sensors. Six times less signal.
-
-### 7. The white-noise assumption was load-bearing
-
-`python examples/02_noise_robustness.py`. Real AFE noise has a 1/f component. Model it as
-AR(1) with lag-1 correlation `rho`; `whiten_ar1` applies the exact Cholesky factor of
-`R⁻¹` in `O(n)`, cross-checked against a densely-inverted correlation matrix in the tests.
-
-Whitening an AR(1) process is a scaled first difference, and its effect on information is
-an exact **reciprocal pair**:
-
-| sensitivity shape | information multiplier | at `rho = 0.9` |
-|---|---|---|
-| constant (DC) | `(1-rho)/(1+rho)` | ÷19 |
-| alternating | `(1+rho)/(1-rho)` | ×19 |
-
-So correlated noise does not uniformly hurt. **It reallocates.** CRLB relative to white
-noise, same pack and duty cycle as above:
-
-| `rho` | `R0` | capacity | `hA` |
-|---:|---:|---:|---:|
-| 0.5 | ×1.54 | ×1.70 | ×1.52 |
-| 0.9 | ×1.21 | ×4.00 | ×1.18 |
-| 0.99 | **×0.39** | ×10.2 | **×0.38** |
-
-Capacity's signature is a slow SOC ramp — near-DC — so it degrades monotonically and
-tracks `sqrt((1+rho)/(1-rho))` almost exactly. `R0`'s lives in the current pulse edges, so
-it is *non-monotone*: it worsens to `rho ≈ 0.7`, then recovers, and at `rho = 0.99` is
-**2.6× tighter than under white noise.** Differencing destroys the noise faster than it
-destroys an edge. Pulsed excitation is lock-in detection: it buys immunity to 1/f noise,
-not merely precision.
-
-![noise robustness](reports/figures/noise_robustness.png)
-
-Three consequences, each of which contradicts something this repo previously asserted:
-
-1. **One headline verdict flips.** At `rho = 0.9`, cooling on the *instrumented* cell 12
-   falls from `DIAGNOSE` (5.46σ) to `REFUSE` (1.93σ). Cooling is then identifiable
-   **nowhere** — not "exactly where the thermocouples are".
-2. **A thermocouple stops being a thermocouple.** Its share of the cooling information
-   collapses from **90.4%** (`rho = 0`) to **0.8%** (`rho = 0.99`). A thermal time constant
-   of ~200 s is essentially DC against a 1 Hz sampler, so whitening annihilates precisely
-   the channel meant to see the fault. `hA` is then read entirely through `R0(T)`'s leak
-   into the voltage channel.
-3. **The sensor-topology story inverts.** At `rho = 0.99` the uninstrumented cell 10
-   (3.25σ) beats the instrumented cell 12 (3.14σ). Once the thermocouple contributes
-   nothing, cell *position* decides.
-
-`LIMITATIONS.md` §2 used to claim that every idealisation inflates the information, so the
-truth is "worse than reported, never better." That was an estimate. It is false in both
-directions at once, and it is now a measurement.
-
-### 8. Refusing is half an answer. The other half is what to measure next.
-
-`python examples/03_next_best_test.py`. Fisher information from independent experiments
-**adds**, so `FIM_after = FIM_before + FIM(u)`. Simulate each candidate test once; every
-ranking, re-ranking and multi-test plan after that is arithmetic on precomputed matrices.
-
-The obvious objective is **D-optimality** — maximise `det FIM`. It is the wrong one:
-
-| test | cost | `EIG_D` (all params) | `EIG` (`hA[10]` alone) | SNR after |
-|---|---:|---:|---:|---:|
-| `pulse_2C_180s_cooldown` | 900 s | **2.90 nats** | 1.35 nats | 5.39σ |
-| `pulse_train_2.5C` | 600 s | 2.63 nats | **1.74 nats** | **7.96σ** |
-
-D-optimality crowns the cooldown, because its 900 seconds sharpen `R0` and capacity —
-parameters nobody asked about. **Ds-optimality** (the target's marginal, exactly
-`0.5·log(CRLB_before / CRLB_after)`) crowns the pulse train, and the realised SNR settles
-it. *You are diagnosing one thing. Optimise that axis, not the ellipsoid volume.*
-
-Neither score is the *decision* rule. Nats-per-minute finds the most efficient test; a
-decision needs the **cheapest test that crosses the threshold**. Efficiency and sufficiency
-are different questions, and at `rho = 0.9` the most efficient test (`pulse_2C_10s`,
-0.21 nats/min) reaches only 1.47σ — still a refusal.
-
-What the engine actually recommends, for a cooling fault on the uninstrumented cell 10 at
-`rho = 0.9`:
-
-| fault | cheapest single test | best possible new thermocouple | recommendation |
-|---:|---|---:|---|
-| 40% | `pulse_train_2.5C` → 7.08σ | 2.00σ | **run 1 test (10 min)** |
-| 15% | none clears | 0.75σ | **48-min protocol** |
-| 8% | none clears | 0.40σ | **REFUSE** |
-
-At 40%, **ten minutes of pulsing beats a permanently installed sensor** — the opposite of
-the white-noise recommendation, and for the reason in §7: under 1/f noise the
-thermocouple's own signature is DC. At 15% no single intervention suffices, but information
-adds, so AstraCell prescribes a schedule. At 8% nothing in the library, no sensor, and no
-affordable protocol reaches 5σ — so it says so.
-
-![next best test](reports/figures/next_best_test.png)
-
-A diagnostic that cannot say *"I cannot see this"* is not a diagnostic. One that can also
-say *"…but here is what would let me"* is an instrument.
-
-### 9. The CRLB cannot see the error the model itself is making
-
-`python examples/04_model_mismatch.py`. Everything above bounds the **variance** of an
-estimator, *given that its model is right*. The model is a first-order ECM with one lumped
-thermal node. Run it against a plant that additionally has SOC-dependent `R0`, a slow
-diffusion branch, a core/surface thermal split and a laggy thermocouple — same parameters,
-so every difference is structural — and the fit no longer converges on `θ*`. It converges on
-the pseudo-true `θ₀`, and the gap is **bias**:
-
-```
-b = FIM⁻¹ Sᵀ Σ⁻¹ r        r = plant(θ*) − observer(θ*)
-```
-
-The residual splits into a part orthogonal to the sensitivity span, which is harmless, and a
-part inside it, which is **indistinguishable from a real parameter change**. The estimator
-attributes it to one.
-
-![structural residual](reports/figures/structural_residual.png)
-
-Cell 10, same duty cycle as §1, ammeter believed:
-
-| hypothesis | SNR (variance) | structural bias | SNR (total) | verdict |
-|---|---:|---:|---:|---|
-| `R0` +20% | 146.11σ | −3.08% | **6.49σ** | DIAGNOSE |
-| capacity −5% | 32.65σ | **−18.53%** | **0.27σ** | **REFUSE_MODEL_BIAS** |
-| cooling −40% | 1.40σ | +1043% | 0.04σ | REFUSE (unobservable, as before) |
-
-The mismatch is pack-global, so the capacity bias is **common-mode**: −18.45% on cell 5,
-−18.53% on cell 10, −18.56% on cell 17. It does not single out a bad cell, because it is not
-a property of any cell. That is precisely why it survives every cross-cell comparison a BMS
-might make, and why §1's 32.6σ capacity diagnosis on cell 17 is worth 0.27σ too.
-
-The capacity bias is arithmetic, not a bug: a slow polarisation droop of a few millivolts is
-indistinguishable from coulombs that never left the cell. **Fitting a first-order ECM over a
-20-minute window manufactures an apparent 18.5% capacity loss — nearly four times the 5%
-fault it was asked to find.** And `hA`'s bias is dominated by the *electrical* blind spots,
-not the thermal ones, because an uninstrumented cell's cooling is only ever seen through
-`R0(T)` (§3). Model error in the voltage channel arrives disguised as a thermal fault.
-
-**Bias is not variance, and the difference is the whole point.** Replicate the experiment
-`k` times: the FIM and the score both scale by `k`, so `b` is unchanged *bit for bit*, while
-`sqrt(CRLB)` falls as `1/√k`. Both invariances are exact and both are tested.
-
-![model mismatch](reports/figures/model_mismatch.png)
-
-| replicas | CRLB (1σ) | bias | SNR reported | SNR credible |
-|---:|---:|---:|---:|---:|
-| 1 | ±0.1369% | −3.0793% | 146.1σ | 6.49σ |
-| 100 | ±0.0137% | −3.0793% | 1 461.1σ | 6.49σ |
-| 10 000 | ±0.0014% | −3.0793% | **14 610.9σ** | **6.49σ** |
-
-A CRLB-only system grows unboundedly more confident and no less wrong the more data you feed
-it. So `decision.py` gained a third gate, `REFUSE_MODEL_BIAS`, and it is the only one whose
-recommendation is never *"collect more data"*.
-
-Two things this breaks in the sections above:
-
-- **Excitation does not remove structural error. It decides which parameter absorbs it.**
-  Going from 0.25C to 2.5C improves every CRLB, drives `R0`'s bias from −10.1% through zero
-  to +1.1%, and drives capacity's from −2.2% to −19.3% — its ceiling falling 2.26σ → 0.26σ.
-  The Ds-optimal planner of §8 will recommend a hard pulse train to sharpen a capacity
-  estimate and destroy its credibility doing it. **It optimises variance and cannot see
-  bias.** (Nor should you chase the 1090σ pole where `R0`'s bias crosses zero: a ±10% error
-  in the *assumed* diffusion resistance flips its sign.)
-- **A nuisance parameter is where model error hides.** Freeing the current-bias offset of §5
-  collapses capacity's bias from −18.5% to +0.3% — genuinely, since a nuisance regressor
-  spanning the residual is the textbook cure for omitted-variable bias. The price is a
-  reported shunt offset of **+1.11 A that is not a shunt offset**, sits inside its 2 A prior,
-  and is flagged by nothing.
-
-What survives untouched: `REFUSE_UNOBSERVABLE` fires first and remains right. Where AstraCell
-was silent, it is still correctly silent. Where it was *confident*, it was sometimes
-confidently wrong — and now it says so. See [`LIMITATIONS.md` §12](LIMITATIONS.md), including
-what §9 itself is not: the plant is four hand-chosen terms, so this is a **lower bound on how
-wrong we are**, not a measurement of it.
-
-### 10. The verdicts are calibrated — and calibration makes them worse
-
-`python examples/05_calibrated_abstention.py`. Everything above is one convincing example.
-This asks whether the verdicts mean what they claim across *thousands* of repeated experiments
-with a known injected truth: does a 90% interval cover 90% of the time? To ask that at all,
-v0.2 adds the one thing the repository never had — an **estimator** (`observability.estimator`),
-which fits the ECM observer to noisy data and turns each realisation into an estimate and a
-verdict. v0.0–v0.1 was an identifiability oracle; v0.2 wraps a detector around it purely to
-audit its confidence.
-
-**Under a matched model the maximum-likelihood interval covers at its nominal rate** — the
-first evidence in this repo that the Cramér–Rao bound is *attained*, not just asserted. **Under
-mismatch the variance-only interval covers essentially never:**
-
-| nominal confidence | 50% | 80% | 90% | 95% | 99% |
-|---|---|---|---|---|---|
-| matched (MLE) | 54% | 80% | 91% | 96% | 99% |
-| mismatched, variance-only | 0% | 0% | 0% | 0% | 0% |
-| mismatched, bias-aware interval | 0% | 100% | 100% | 100% | 100% |
-
-![coverage vs nominal](reports/figures/calibration_coverage.png)
-
-The variance-only observer is not slightly optimistic; it is certain and wrong. Widening the
-interval to admit the bias restores coverage only above 80%, and only by becoming ~60% wide.
-
-And the reason no amount of data fixes it — the central claim of the whole project, now a
-frequency rather than an anecdote:
-
-![more data buys precision, not accuracy](reports/figures/calibration_snr_vs_samples.png)
-
-Repeat the experiment 10 000×: variance-only SNR climbs to 1281σ while the estimate cloud
-tightens by 100× onto **−35.5%** (the pseudo-true value) and never approaches the −5% truth.
-The bias-aware SNR saturates at **0.17σ** and stops dead.
-
-The payoff is the *harmful-overclaim rate* — a DIAGNOSE whose confident interval misses the
-truth. The model-bias gate turns those into refusals: on the capacity fault it drops the
-overclaim rate from **100% to 0%**. (On R0, whose bias is small, it stays at 18% — the gate
-widens uncertainty for the parameter the model gets badly wrong, and honestly cannot repair one
-it gets slightly wrong everywhere.)
-
-**Calibration made several of AstraCell's numbers worse.** The capacity fault it diagnosed at
-32.6σ is now refused, correctly, because 30 of those sigmas were the observer's own model error.
-That is not a regression — it is the only kind of diagnostic worth trusting. Full accounting,
-and the line between what is validated and what is merely synthetic, in
-[`docs/CALIBRATION.md`](docs/CALIBRATION.md).
-
-### 11. It survives a plant it did not write — by refusing
-
-`python examples/06_external_plant_gate.py` (needs `pip install -e '.[pybamm]'`). Everything above
-measures AstraCell against a battery *we* built — v0.1's mismatch was four terms we chose, at
-sizes we set. v0.3 is the first external-validity test: the data now comes from a **PyBaMM** SPMe
-single cell, whose electrolyte diffusion the first-order ECM cannot express and whose mismatch we
-did not design. Same estimator, same gates; PyBaMM only fills the `plant_output` slot.
-
-The result is starker than v0.1's. On a **perfectly healthy** cell, the variance-only observer
-reports a capacity deviation of **−67.6% ± 0.145% — 466σ from the truth of zero** — because it
-mistakes the slow diffusion droop for capacity loss. A *self-consistency control* (an ECM-generated
-trace through the same pipeline) covers at nominal to within 0.011, so the collapse is PyBaMM's
-mismatch, not our plumbing:
-
-| nominal confidence | 50% | 80% | 90% | 95% | 99% |
-|---|---|---|---|---|---|
-| control (ECM plant) | 49% | 80% | 91% | 95% | 99% |
-| PyBaMM plant, variance-only | 0% | 0% | 0% | 0% | 0% |
-| PyBaMM plant, bias-aware | 0% | 100% | 100% | 100% | 100% |
-
-![a plant we did not write breaks variance-only coverage](reports/figures/external_coverage.png)
-
-Without the gate, the observer diagnoses this phantom fault in **every trial at every C-rate**. The
-bias gate — reading its *own* residual to estimate its bias — refuses all of them: harmful overclaim
-**100% → 0%**, every trial `REFUSE_MODEL_BIAS`.
-
-![a healthy cell diagnosed as faulty, until the gate refuses](reports/figures/external_overclaim.png)
-
-The one number *not* to quote is the −67.6% itself: it swings from **+114% to −68%** with C-rate and
-from **−94% to +5%** with the observer's RC tuning — its instability is the proof it is not a real
-capacity loss. What is robust is the inequality (bias ≥ 30σ everywhere) and therefore the refusal.
-An earlier draft of the code called the bias "robust to R1/C1"; measurement falsified that and the
-claim was retracted. Under an honest plant AstraCell diagnoses *less* — which is the whole point.
-The full result, and the four disclaimers it comes with, in
-[`docs/EXTERNAL_PLANT.md`](docs/EXTERNAL_PLANT.md).
-
-**And then §12 found that this gate refused everything.**
-
-### 12. The refusal was unconditional. A positive control caught it.
-
-`python examples/07_external_positive_control.py`. §11 is a **negative control** — a healthy cell,
-correctly not diagnosed — and a negative control is passed by a diagnostic that never diagnoses
-anything. v0.3 shipped one of those.
-
-`prepare_external` projected the very trace the estimator was about to fit, so its "structural bias"
-was algebraically the expected estimate, `b ≡ E[δ̂]`. Substitute that into the credibility statistic:
-
-```
-SNR_total = |b + ε| / sqrt(σ² + b²)        E[SNR_total²] = (b² + σ²)/(σ² + b²) = 1   exactly, any b
-```
-
-**A pure noise statistic.** It knows nothing about the battery. Feed it 20 mV of sine wave: 300/300
-`REFUSE_MODEL_BIAS`. Feed it a 1 V ramp implying a 1718% capacity deviation: 300/300. Feed it a PyBaMM
-cell whose **series resistance has doubled**: 300/300, cheerfully labelling the 91.4% fault "bias".
-Every number in §11 reproduces. Its refusal was arithmetic, not evidence.
-
-So v0.4 injects real faults into PyBaMM and scores AstraCell as a *detector*. A **contact resistance**
-(corroded tab weld) is exactly what an ECM's `R₀` is — the differential is `−ΔR·I` to 3.6 × 10⁻¹⁶ V —
-so it is recoverable in principle. A **cathode diffusivity ×0.3** (particle cracking) is exactly what
-an ECM cannot express, and its true `(R₀, capacity)` deviation is `(0, 0)`.
-
-With a healthy baseline, the phantom subtracts off exactly (baseline subtraction and paired comparison
-are *the same estimator*; the identity holds to 6 × 10⁻¹⁶), at a cost of `√2` in σ. Gate the result on
-the part of the residual **no parameter setting reproduces**, and:
-
-| scenario | true fault | true positive | false positive | refusal |
-|---|---|---|---|---|
-| healthy cell | — | — | **0.00** | 0.95 |
-| weak fault (+0.05 mΩ) | +0.2% R₀ | 0.00 | — | 0.36 (rest: weak) |
-| real fault (+5.00 mΩ) | +20% R₀ | **0.94** | — | 0.00 |
-| confounded (D ×0.3) | none | — | **0.00** | **1.00** |
-
-![finds the fault it can express, refuses the one it cannot](reports/figures/positive_control_rates.png)
-
-**Diagnosis is not detection.** Without the baseline, a doubled series resistance is loud enough to
-clear the phantom's gate — and the observer diagnoses it in *every* trial, reporting **+91.4% against
-a truth of +100%**, an 8.6-point miss inside a 0.23%-wide interval. 145σ of misplaced confidence, and
-a harmful overclaim every time. Scoring only overclaim rewards silence; scoring only diagnosis rewards
-noise.
-
-Three things this does **not** establish, all measured rather than conceded. The honest gate is a
-*screen, not a bound*: on the one case with known truth it captures **31%** of the bias it warns
-about. The confounder's capacity hypothesis is refused at **1.98σ against a 2.00σ threshold** — by one
-percent, and at a 300 s window it is not refused at all. And the baseline here is the *identical
-simulation*, which no workshop can supply, so every rate above is an **upper bound**.
-[`docs/POSITIVE_CONTROL.md`](docs/POSITIVE_CONTROL.md) §5.
-
----
+The rest of the argument, each finding linked to its example, test, and figure in
+[CLAIMS.md](docs/CLAIMS.md) and derived in full in the [report](docs/TECHNICAL_REPORT.md):
+
+- **Refusal comes with a fix.** A counterfactual thermocouple lifts cell 10's cooling SNR to
+  5.71σ (4.6× tighter) — or a 1.83C pulse does it with no new hardware. Excitation
+  substitutes for a sensor. *(`examples/03`)*
+- **Correlated noise reallocates information**, it doesn't uniformly hurt: at `rho=0.99`,
+  capacity gets 10× worse while `R0` and `hA` get *better*. This corrected a claim the repo
+  once made the other way. *(`examples/02`,
+  [WHAT_DID_NOT_WORK](docs/WHAT_DID_NOT_WORK.md) §2)*
+- **The bound cannot see model bias.** A first-order ECM fitted over 20 minutes manufactures
+  an 18.5% capacity loss from a 5% fault — and *more data makes it worse*: reported
+  confidence climbs to 14 611σ while credible confidence sits fixed at 6.49σ. *(`examples/04`)*
+
+  ![model mismatch](reports/figures/model_mismatch.png)
+
+- **The verdicts are calibrated — and calibration makes them worse.** Under mismatch the
+  variance-only interval covers the truth 0% of the time; the model-bias gate drops harmful
+  overclaim on capacity from 100% to 0%, by refusing. *(`examples/05`)*
+- **An independently developed external simulator produces a phantom fault.** Fitted to a
+  healthy PyBaMM cell, the observer reports −67.6% ± 0.145% capacity loss (466σ from zero); a
+  self-consistency control proves it is PyBaMM's physics, not our harness. The gate refuses.
+  *(`examples/06`)*
+
+  ![external phantom](reports/figures/external_estimate_distribution.png)
+
+- **The refusal discriminates.** With a healthy baseline, the same machinery recovers a real
+  injected fault at +20.0000% with nominal coverage, and still refuses a real degradation it
+  cannot express — by a one-percent margin, reported not rounded away. *(`examples/07`)*
+
+  ![positive control](reports/figures/positive_control_rates.png)
 
 ## Install and run
 
@@ -489,7 +120,7 @@ python -m venv .venv
 # .venv/bin/python -m pip install -e ".[dev,notebook]"      # Linux / macOS
 ```
 
-or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[dev,notebook]"`
+or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[dev,notebook]"`.
 
 | Command | What it does |
 |---|---|
@@ -498,29 +129,15 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/03_next_best_test.py` | ranks what to measure next; refuses when nothing suffices |
 | `python examples/04_model_mismatch.py` | prices the observer's own model error |
 | `python examples/05_calibrated_abstention.py` | are the verdicts calibrated across repeated trials? |
-| `pip install -e ".[pybamm]"` | add the optional external plant (PyBaMM) for examples 06-07 |
-| `python examples/06_external_plant_gate.py` | does abstention survive a plant we did not write? |
-| `python examples/07_external_positive_control.py` | and when that plant is really broken, does it notice? |
-| `python -m pytest` | 226 tests, ~2 min (external-plant tests skip without PyBaMM) |
-| `python -m pytest -m "not regression"` | skip the findings-pinning tests |
-| `python -m pytest -m "not pybamm"` | skip the tests that need the optional PyBaMM dependency |
-| `python -m ruff check src tests examples` | lint |
-| `python -m mypy` | type-check `src/` |
-| `make notebook` | regenerate the four notebooks' source (**strips their outputs**) |
-| `make notebook-run` | execute them in place, restoring the outputs |
-| `jupyter lab notebooks/01_identifiability_study.ipynb` | the identifiability study |
-| `jupyter lab notebooks/02_calibrated_abstention.ipynb` | the calibration study |
-| `jupyter lab notebooks/03_external_plant_gate.ipynb` | the external-plant study (skips without PyBaMM) |
-| `jupyter lab notebooks/04_external_positive_control.ipynb` | the positive control (skips without PyBaMM) |
+| `pip install -e ".[pybamm]"` | add the optional external simulator (PyBaMM) for examples 06–07 |
+| `python examples/06_external_plant_gate.py` | does abstention survive an external simulator? |
+| `python examples/07_external_positive_control.py` | and when that cell is really broken, does it notice? |
+| `python -m pytest` | 226 tests, ~100 s (external-simulator tests skip without PyBaMM: 212 pass, 14 skip) |
+| `python -m ruff check src tests examples scripts` · `python -m mypy` | lint · type-check |
 
-The notebooks are generated from `scripts/build_notebook.py` but committed *executed*, so they
-render with their figures on GitHub. Edit the builder, never the `.ipynb` — and always follow
-`make notebook` with `make notebook-run` before committing. `tests/test_notebooks.py` enforces both
-halves of that.
-
-`make help` lists the same targets (`make check` = lint + typecheck + test).
-
----
+`make check` runs lint + typecheck + test; `make help` lists every target. The full
+pre-release sequence, the fresh-clone instructions, and the pinned-numbers guard are in
+[REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
 ## How it works
 
@@ -528,190 +145,61 @@ halves of that.
     duty cycle ──┐
     pack params ─┼──▶ simulate() ──▶ central differences ──▶ S[t, cell, {V,T}, param]
     fault inject ┘                                                    │
-                                                                      │  ← every cell's
-                                                                      │    V *and* T,
-    sensor topology ──────────────────────────────────────────────────┤    instrumented
-    noise model ──────────────────────────────────────────────────────┤    or not
-                                                                      ▼
-                                            row mask   ──▶  FIM = Sᵀ Σ⁻¹ S
-                                                                      │
-                            ┌─────────────────────────────────────────┤
-                            ▼                                         ▼
-                    CRLB = diag(FIM⁻¹)                  VIF = FIM_jj · [FIM⁻¹]_jj
-                            │                                         │
-                    SNR = magnitude/√CRLB                    isolation gate
-                            │                                         │
-                            └──────────────┬──────────────────────────┘
-                                           ▼
-                                    decide() ──▶ DIAGNOSE
-                                              ├─▶ WEAK_EVIDENCE
-                                              ├─▶ REFUSE_UNOBSERVABLE  + recommendation
-                                              └─▶ REFUSE_CONFOUNDED    + recommendation
+    sensor topology ──────────────────────────────────────────────── │  ← row mask
+    noise model ──────────────────────────────────────────────────── ▼
+                                            FIM = Sᵀ Σ⁻¹ S ──▶ CRLB = diag(FIM⁻¹)
+                                                       │              │
+                                       VIF (isolation) ┤              ├ SNR = magnitude/√CRLB
+                                                       ▼              ▼
+                                          decide() ──▶ DIAGNOSE / WEAK_EVIDENCE
+                                                    ├─▶ REFUSE_UNOBSERVABLE  + recommendation
+                                                    ├─▶ REFUSE_CONFOUNDED    + recommendation
+                                                    └─▶ REFUSE_MODEL_BIAS    (bias ≫ signal)
 ```
 
-Because sensitivities are computed for **every** cell's voltage and temperature — not
-just the instrumented ones — a sensor topology is only a *row mask* over the sensitivity
-tensor. Counterfactual sensor placement therefore costs a matrix slice, not a
-re-simulation. That is what makes `recommend_temp_sensor()` cheap.
-
-### Two gates, in this order
-
-1. **Isolation.** Is the parameter separable from the ones it could be confused with?
-   Measured by the **variance inflation factor** `VIF_j = FIM_jj · [FIM⁻¹]_jj ≥ 1`, with
-   the conventional `VIF > 10` threshold from regression diagnostics. *Not* the condition
-   number: `cond(FIM)` is a property of the matrix, dominated by whichever direction is
-   worst-informed, so a pack with invisible `hA` has a huge `cond(FIM)` even when its `R0`
-   is perfectly isolated — gating on it would refuse every diagnosis.
-2. **Detection.** Given separability, is the fault big enough to clear the CRLB floor?
-   `≥5σ` observable, `2–5σ` weak, `<2σ` refuse.
-
-Isolation is checked first because two parameters can be jointly well-determined (high
-SNR on their sum) while being individually unidentifiable. Reporting "resistance fault,
-8σ" when the data cannot separate resistance from capacity would be a confident lie.
-
-### One implementation detail worth stating
-
-`crlb()` does **not** use `np.linalg.pinv`. The pseudo-inverse of a rank-deficient FIM
-returns the minimum-norm solution, which yields *finite* variances for parameters that are
-completely unidentified — it would make the system claim it can see things it cannot.
-Instead we eigendecompose, discard directions at the level of floating-point noise, and
-return `inf` for any parameter with support on a discarded direction.
-
----
+Because sensitivities are computed for **every** cell's voltage and temperature, a sensor
+topology is only a *row mask* over the sensitivity tensor — so counterfactual sensor
+placement costs a matrix slice, not a re-simulation. Two gates run in order: **isolation**
+(is the parameter separable? `VIF > 10` ⇒ confounded) then **detection** (is the fault big
+enough to clear the CRLB floor? `≥5σ` / `2–5σ` / `<2σ`). One detail worth stating: `crlb()`
+does **not** use `pinv` — the pseudo-inverse returns finite variances for unidentified
+parameters, which would make the system claim it can see things it cannot. Definitions of
+every term are in [GLOSSARY.md](docs/GLOSSARY.md); the derivations in the
+[report's methods appendix](docs/TECHNICAL_REPORT.md#methods-appendix).
 
 ## Repository layout
 
 ```
 src/astracell/
-  cell/         ocv.py · ecm.py · thermal.py        first-order Thevenin + lumped thermal
-  pack/         topology.py · params.py · simulate.py   4x8 grid, exact SOC/RC, Euler thermal
-  duty/         profiles.py                          constant · pulse · random walk · rest+pulse
-  sensors/      topology.py · noise.py · sampling.py   <- the observability bottleneck; AR(1) draws
-  faults/       library.py · injector.py             physical faults vs sensor faults
-  observability/
-    sensitivity.py    central differences; per-cell params + a global current-bias nuisance
-    fisher.py         FIM, CRLB (no pinv), VIF, exact AR(1) whitening, Van Trees priors
-    mask.py           SNR -> {observable, weak, unobservable} -> GreyCellMap
-    detectability.py  the (excitation x magnitude) heatmap
-    experiment.py     <- what to measure next. Ds-optimal, and greedy sequential planning.
-    bias.py           <- structural bias, and the lack-of-fit screen that needs no counterfactual
-    estimator.py      <- an estimator, at last: fits the observer to noisy data.
-    decision.py       <- the refusal. Three gates, and a recommendation.
-  plant/        mismatch.py · simulate.py · pybamm_plant.py   richer plants + injected PyBaMM faults
-  calibration/  scenario.py · montecarlo.py · metrics.py · external.py · positive_control.py
-  viz/          packmap.py · heatmap.py
-
-examples/01_first_demo.py                   the whole thesis, six acts
-examples/02_noise_robustness.py             the honesty pass: which claims survive 1/f noise
-examples/03_next_best_test.py               optimal experiment design; the refusal of last resort
-examples/04_model_mismatch.py               what the Cramer-Rao bound cannot see
-examples/05_calibrated_abstention.py        are the verdicts calibrated across repeated trials?
-examples/06_external_plant_gate.py          does abstention survive a PyBaMM plant we did not write?
-examples/07_external_positive_control.py    and when that plant is really broken, does it notice?
-notebooks/*.ipynb                           generated by scripts/build_notebook.py, committed executed
-docs/CALIBRATION.md                         what v0.2 validates, and what it only simulates
-docs/EXTERNAL_PLANT.md                      what v0.3 tests against PyBaMM, and its four disclaimers
-docs/POSITIVE_CONTROL.md                    how v0.4 found that v0.3's gate refused everything
-tests/        physics invariants (hypothesis) · faults · sensors · observability · noise
-              correlation · experiment design · model mismatch · calibration · positive control
-              · notebooks (are they in sync with their generator, and still executed?)
-LIMITATIONS.md                              written before the code. Read it. It is now
-                                            partly a record of claims this repo got wrong.
+  cell/ pack/ duty/ sensors/     first-order Thevenin + lumped thermal, 4x8 grid, duty cycles, AR(1) noise
+  faults/                        physical faults vs sensor faults
+  observability/                 sensitivity · fisher (FIM/CRLB/VIF) · mask · experiment · bias · estimator · decision
+  plant/ calibration/            richer plants (incl. PyBaMM) · Monte Carlo coverage, external, positive control
+  viz/                           pack maps and heatmaps
+examples/01..07                  the thesis, then each honesty pass in turn
+notebooks/01..04                 generated by scripts/build_notebook.py, committed executed
+docs/                            TECHNICAL_REPORT · PORTFOLIO · CLAIMS · REPRODUCIBILITY · GLOSSARY ·
+                                 FIGURES · WHAT_DID_NOT_WORK · CALIBRATION · EXTERNAL_PLANT · POSITIVE_CONTROL
+LIMITATIONS.md                   written before the code; now also a record of claims this repo got wrong
 ```
-
-## Physics implemented
-
-```
-V_i  = OCV(z_i, T_i) − I·R0_i(T_i) − v1_i        R0(T) = R0_ref · exp(Ea/R · (1/T − 1/T_ref))
-ż_i  = −η·I / (Q_i · 3600)                        exact discrete update
-v̇1_i = −v1_i/(R1·C1) + I/C1                       exact discrete update
-
-C_th·Ṫ_i = I²R0_i + I·v1_i − I·T_i·∂OCV/∂T − Σ_j k_ij(T_i − T_j) − hA_i(T_i − T_cool)
-           └── irreversible ──┘ └─ entropic ─┘  └── conduction ──┘  └── convection ──┘
-```
-
-The entropic term is kept. Most implementations drop it; it is 10–30% of heat generation
-at low C-rate and its **sign flips between charge and discharge**, which is a
-distinguishable telemetry signature. The identity `I·(OCV − V) ≡ I²R0 + I·v1` holds to
-machine precision (1.8e-15) and is asserted in `tests/test_physics_invariants.py`.
-
-Integration: SOC and the RC branch use their **exact** discrete solutions for
-piecewise-constant current; temperature uses forward Euler at `dt = 1 s` against a ~220 s
-thermal time constant. This lets the simulation step equal the sensor sampling period,
-which matters — the Fisher information scales with the number of *independent samples*, so
-an integrator forcing `dt << dt_sensor` would tempt you into counting information you
-never measured.
-
-## Tests
-
-226 tests, of which 212 pass and 14 skip without the optional PyBaMM dependency (measured, not
-asserted: `mv site-packages/pybamm` away and `pytest` still exits 0). They assert **theorems**,
-not observed numbers — a test that hard-codes "the SNR is 149" is a test of the OCV curve, not of
-the code, and would break the moment the stand-in curves are replaced with real ones, which is
-the plan.
-
-- `dV/d(relative R0) == −I·R0` exactly at `t=0`, to machine precision
-- charge conservation, energy balance, `V ≤ OCV` on discharge, monotone cooling at rest
-- the conduction matrix is a Laplacian (symmetric, PSD, null space = constants)
-- **adding a sensor never increases the CRLB** (Loewner monotonicity — a theorem)
-- `whiten_ar1` reproduces `xᵀR⁻¹x` for a densely-inverted AR(1) correlation matrix. This
-  test caught a real bug: the `sqrt(1-rho²)` was on the wrong row of the Cholesky factor,
-  scaling every information number by `(1-rho²)` and silently inverting the conclusion.
-- Fisher information is additive across independent channels — the theorem `plan_tests`
-  rests on, without which it would have to re-simulate
-- `information_gain(A, B) == gaussian_entropy(A) - gaussian_entropy(B)`
-- a structural residual **orthogonal** to the sensitivity span produces exactly zero bias;
-  one equal to `S @ delta` produces exactly bias `delta`. The projection does algebra, not
-  agreement.
-- the bias is **exactly invariant** to rescaling every noise sigma, and to replicating the
-  experiment 100×, while the CRLB moves by 10× and 1/10×. Bias is structural; variance is
-  statistical; the code can tell them apart.
-- the linearised bias predicts where a real damped Gauss–Newton fit of the observer to the
-  plant comes to rest, with the error falling as `O(mismatch)` — 45% → 0.4% over a 300× range
-- the estimator **attains the CRLB**: a Gauss–Newton fit's scatter matches `sqrt(CRLB)` and its
-  coverage tracks nominal under a matched model — the first check that the bound is *reachable*
-- the sampled AR(1) noise **whitens to white**, so `Σ_sample == Σ_FIM` and coverage is measured
-  against the right matrix; under mismatch the variance-only interval provably *undercovers*
-- the model-bias gate **reduces the harmful-overclaim rate** on a pinned scenario, and every
-  verdict kind — including all three refusals — is reachable and counted
-- fed an ECM trace, the external-plant harness covers at **nominal** (the self-consistency
-  control, no PyBaMM); fed a **PyBaMM** cell it provably undercovers and the gate refuses
-- `crlb()` returns `inf` for perfectly collinear parameters (where `pinv` would lie)
-- `VIF ≥ 1` always; `VIF == 1` exactly for an orthogonal design
-- fault injection never mutates the ground truth
-- Monte Carlo trials are **bit-for-bit deterministic** under a seed
-- two tests marked `regression` pin a *finding* on one configuration, and say so
 
 ## Status
 
-Built in five passes. **v0.0** answered *"what is identifiable?"* — the Fisher/CRLB machinery,
-the grey-cell map, the refusal. **v0.1** added the **model-mismatch gate** (§9): a
+Built in five passes. **v0.0** answered *"what is identifiable?"* — the Fisher/CRLB
+machinery, the grey-cell map, the refusal. **v0.1** added the **model-mismatch gate**: a
 higher-fidelity plant, the structural bias `b = FIM⁻¹Sᵀ Σ⁻¹ r`, and `REFUSE_MODEL_BIAS`.
-**v0.2** added **calibrated abstention** (§10): an estimator, a Monte Carlo harness, and the
-coverage/overclaim numbers that show the verdicts hold up as frequencies — and that the
-variance-only ones do not, under mismatch. **v0.3** added the **external-plant gate** (§11): the
-data now comes from a **PyBaMM** cell, and the same abstention logic survives a plant we did not
-write — by refusing to diagnose a 68% phantom fault on a healthy cell.
+**v0.2** added **calibrated abstention**: an estimator, a Monte Carlo harness, and the
+coverage/overclaim numbers showing the variance-only verdicts do not hold up under mismatch.
+**v0.3** added the **external-simulator gate** (PyBaMM). **v0.4** added the **positive
+control**, and found that v0.3's gate had refused *everything* — its statistic was pure
+noise. The same machinery now recovers a real injected fault at its correct magnitude and
+still refuses a real degradation it cannot express. Worse numbers, and the first ones that
+mean anything.
 
-**v0.4** added the **positive control** (§12), and it found that v0.3's external gate refused
-*everything* — its credibility statistic was pure noise, `E[SNR_total²] = 1` for any data at all.
-Every v0.3 measurement reproduces; the meaning of its refusal did not. With a healthy baseline and
-a gate that reads only what no parameter setting can reproduce, the same machinery now recovers a
-real injected fault at its correct magnitude with nominal coverage, and still refuses a real
-degradation it cannot express — the latter by a **1% margin**, on a screen that captures **31%** of
-the bias it warns about. Worse numbers, and the first ones that mean anything.
-
-There is still no residual bank, no classifier, no real data, no dashboard, and no LLM. Those
-come after — and only for the faults this machinery says are worth chasing, and can be trusted.
-
-v0.3 took the first half of the step v0.1 deferred — a real electrochemical plant (SPMe) instead
-of four plausible terms — and v0.4 took the second: an *injected* electrochemical fault, recovered.
-What remains is capacity fade, which cannot be injected cleanly without giving up the shared-OCV
-control that isolates dynamic mismatch; **DFN with degradation submodels**; and beyond any
-simulation, a **measured** pseudo-OCV and pulse response. Note also that v0.4's baseline is the
-identical simulation, so its detection rates are upper bounds on what any real baseline could
-deliver. See [`LIMITATIONS.md`](LIMITATIONS.md) §15 and
-[`docs/POSITIVE_CONTROL.md`](docs/POSITIVE_CONTROL.md) §5.
+There is still no residual bank, no classifier, no real data, no dashboard, and no LLM.
+Those come after — and only for the faults this machinery says are worth chasing, and can be
+trusted. The next honest step is a **measured** pseudo-OCV and pulse response; see the
+[technical report](docs/TECHNICAL_REPORT.md) §7 and [LIMITATIONS.md](LIMITATIONS.md).
 
 ## License
 
