@@ -35,6 +35,14 @@ notebook = [
 pybamm = [
     "pybamm>=25",
 ]
+# The Oxford Battery Degradation Dataset loader (v0.6). Optional, like pybamm: the core stays
+# numpy-only and the whole real-cell suite skips without these deps and the data. .mat v7.3 needs
+# h5py; older versions load via scipy.io. The data is ODC-ODbL, fetched by scripts/fetch_oxford.py,
+# and never committed to this repository.
+oxford = [
+    "scipy>=1.11",
+    "h5py>=3.10",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/astracell"]
@@ -46,6 +54,7 @@ filterwarnings = ["error::RuntimeWarning"]
 markers = [
     "regression: pins a finding on one specific configuration, not a universal law",
     "pybamm: requires the optional PyBaMM dependency; skipped if it is not installed",
+    "oxford: needs the optional [oxford] extra (scipy/h5py) and/or the downloaded dataset; deselect with -m 'not oxford'",
 ]
 
 [tool.ruff]
@@ -73,4 +82,10 @@ warn_unused_ignores = true
 # PyBaMM ships no type stubs and is an optional dependency; the adapter in
 # astracell.plant.pybamm_plant confines the untyped surface to one module.
 module = ["pybamm", "pybamm.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# scipy.io and h5py back the optional Oxford .mat loader (astracell.plant.oxford); neither
+# ships complete stubs, so confine the untyped surface to that one module.
+module = ["scipy", "scipy.*", "h5py", "h5py.*"]
 ignore_missing_imports = true

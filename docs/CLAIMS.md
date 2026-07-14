@@ -12,8 +12,9 @@ and the one most battery-diagnostic work blurs:
 - **Tier 2 — independently developed external simulator.** Tested against PyBaMM, an
   electrochemical simulator that AstraCell did not implement, whose mismatch it did not
   design. Stronger than Tier 1; still synthetic.
-- **Tier 3 — physical battery validation.** A measured cell. **None yet** — see the Tier 3
-  table, which exists to state the absence plainly.
+- **Tier 3 — physical battery validation.** A measured cell. **No validation** — v0.6 made
+  first *contact* (one real cell, on which the ECM refused; C19), which is not validation. See
+  the Tier 3 table, which states both the contact and the absence plainly.
 
 Schema: **Claim ID · Claim · Validation tier · Evidence · Reproduction command · Limitations**.
 `$PY` is the venv Python (see [REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
@@ -47,13 +48,16 @@ Schema: **Claim ID · Claim · Validation tier · Evidence · Reproduction comma
 
 ## Tier 3 — physical battery validation
 
-These rows exist to state an absence plainly. AstraCell makes **no** Tier 3 claim.
+These rows state an absence plainly: AstraCell makes **no** Tier 3 *validation* claim. C19 records
+v0.6's first real-cell *contact* — on one measured cell the ECM is directionally wrong and AstraCell
+refuses — which is not validation, and does not become it by adding a single cell.
 
 | ID | Claim | Tier | Evidence | Reproduction | Limitations |
 |---|---|---|---|---|---|
-| C16 | **No physical battery has been measured**, no real fault detected, no public dataset ingested. No result here is validated against anything but code and an electrochemical simulator | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1, §10, §14, §15 | — (nothing to run; the absence *is* the claim) | This is the project's largest gap. Every Tier 1/2 result is conditional on models that have never touched a cell |
+| C16 | **No physical battery validates AstraCell, and no real fault has ever been detected.** v0.6 made first *contact* — one real cell measured and scored (Oxford Cell1; C19), on which the ECM refused every age — but that is contact, not validation: one cell of eight, no fault detected, no diagnosis confirmed. No result is validated against anything but code, an electrochemical simulator, and one real cell the observer declined to trust | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1, §10, §14, §15, §16 | see C19 for the one real run; otherwise nothing — the *absence of validation* is the claim | This is the project's largest gap. Every Tier 1/2 result is conditional on models that have otherwise not touched a cell |
 | C17 | The OCV curves are **stand-ins** (`NMC_LIKE` from a Li-polymer fit; `LFP_LIKE` hand-built), so every SNR and CRLB is a statement about *this model*, not a battery | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1 | — | Replace `cell/ocv.py` with measured tables before quoting any figure outside this repository |
 | C18 | AstraCell claims **no** EV-level validation and **no** safety-critical deployment readiness | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §14 · [POSITIVE_CONTROL](POSITIVE_CONTROL.md) §5 | — | It is a research scaffold for the identifiability question, nothing more |
+| C19 | On **Oxford Cell1** (a real measured cell), the first-order ECM's capacity estimate is wrong in **sign** — a +1.9% → +10.5% "gain" against a measured −3.7% → **−24.2%** fade (≈1150σ from truth) — and AstraCell refuses it on **all 13 scored ages (REFUSE_MODEL_BIAS, coverage 0/13), in both OCV modes**. Abstention holds on a measured cell | 3 — contact (one cell, not validation) | `examples/08` · `plant/oxford.py` · `test_oxford.py` · `real_cell_capacity.png` · [REAL_CELL](REAL_CELL.md) | `$PY scripts/fetch_oxford.py` then `$PY examples/08_real_cell.py` *(needs the ODbL download + `.[oxford]` extra)* | One cell of eight, first-order ECM, isothermal, shared baseline a different day; **no fault detected and the ECM is not validated — the refusal *is* the result**. Numbers reproduce from the fetched data, which is never committed. [REAL_CELL](REAL_CELL.md), [LIMITATIONS](../LIMITATIONS.md) §16 |
 
 ---
 

@@ -37,9 +37,10 @@ An identifiability engine (Fisher/CRLB) with two ordered gates — separability 
 detectability (SNR) — that returns DIAGNOSE, WEAK, or one of three refusals, each with a
 recommendation where one exists (instrument a cell, or excite it harder). Around it: a
 model-bias gate that prices the observer's own structural error, an estimator, a Monte
-Carlo calibration harness, an external PyBaMM plant, and a positive control. The core is
-numpy-only; 226 tests assert theorems, not observed numbers. Built in five passes,
-v0.0 → v0.4.
+Carlo calibration harness, an external PyBaMM plant, a positive control, and — in v0.6 — a
+real-cell run against the Oxford dataset — on one cell the first-order ECM is directionally
+wrong and AstraCell refuses it. The core is numpy-only; 236 tests assert theorems, not observed
+numbers. Built in five science passes (v0.0 → v0.4), since packaged and taken to a measured cell.
 
 ## How I know it works
 
@@ -76,10 +77,13 @@ positive only when the interval actually covers the truth.
 
 Equally important, and stated plainly rather than buried.
 
-**No physical battery has ever been part of this.** No real cell measured, no real fault
-detected, no public dataset ingested. Tier 3 is empty. Every result above is conditional on
-models that have never touched a cell — the OCV curves are stand-ins, so every SNR is a
-statement about a model, not a battery. The Cramér–Rao bound is variance-only and blind to
+**No physical battery validates any of this.** v0.6 finally ran the observer against a real
+measured cell (Oxford Cell1) — and it refused: the first-order ECM's capacity estimate came back
+wrong in *sign* (a +10.5% "gain" against a measured −24.2% fade, ≈1150σ from truth),
+REFUSE_MODEL_BIAS on all 13 scored ages. That is **contact, not validation** — one cell of eight,
+no fault detected, the ECM confirmed nowhere; the refusal is the honest result, not a green light.
+Every Tier 1/2 result above is still conditional on models that have otherwise not touched a cell —
+the OCV curves are stand-ins, so every SNR is a statement about a model, not a battery. The Cramér–Rao bound is variance-only and blind to
 model bias by construction; the screen I use to catch that bias externally is a *screen, not
 a bound* — on the one case where I know the truth, it captures only 31% of the error it
 warns about, and a bias three times smaller would have slipped through. My internal mismatch
@@ -94,8 +98,12 @@ readiness.** This is a research scaffold for the identifiability question.
 ## What I would do next
 
 Only for the faults this machinery certifies as answerable and trustworthy. First and above
-all, a **measured pseudo-OCV and pulse response from a real cell** — the only step that moves
-anything to Tier 3, and the one no simulation can stand in for. Then DFN with degradation
+all, **more real cells, and a better observer for them.** v0.6 ran one (Oxford Cell1); the
+first-order ECM came back directionally wrong and AstraCell refused every age — the prediction
+that a real cell would mismatch the ECM harder than PyBaMM did, now measured. The honest next
+step is the other seven cells, a same-day baseline, and an observer that can express real OCV
+drift — to learn whether the refusal ever becomes a trustworthy diagnosis. That is the only path
+that moves anything to Tier 3, and no simulation stands in for it. Then DFN with degradation
 submodels and injected capacity fade; ramped and concurrent faults; and, built last rather
 than first, a classifier — on the faults the identifiability layer has already certified.
 Building the classifier first would reproduce exactly the failure mode this project exists

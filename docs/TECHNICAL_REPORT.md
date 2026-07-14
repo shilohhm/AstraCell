@@ -20,9 +20,9 @@ one.
 |---|---|---|
 | **1 — internal self-consistency and synthetic experiments** | Demonstrated within AstraCell's own models, and by theorems about the estimator | Extensive: identifiability, calibration, model-bias accounting all measured |
 | **2 — independently developed external simulator** | Tested against PyBaMM — an electrochemical simulator AstraCell did not implement, whose mismatch it did not design | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **None.** No cell has been touched. This is stated, not hidden |
+| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.6 ran one real cell (Oxford Cell1) and the ECM refused every age; no validation, one cell of eight. Stated, not hidden |
 
-Everything in §4 is labelled by tier. Everything in §6 is why Tier 3 is empty.
+Everything in §4 is labelled by tier. Everything in §6 is why Tier 3 has no *validation* — one cell of contact (§7.1) does not make one.
 
 ---
 
@@ -237,12 +237,16 @@ None is hidden, and each is pinned by a test.
 
 ## 6. What it cannot claim
 
-The second-longest section, deliberately. Tier 3 is empty, and here is the full account of
-why. The complete ledger is [LIMITATIONS.md](../LIMITATIONS.md); the essentials:
+The second-longest section, deliberately. Tier 3 has no *validation* — v0.6's one cell of
+contact does not make one — and here is the full account of why. The complete ledger is
+[LIMITATIONS.md](../LIMITATIONS.md); the essentials:
 
-- **No physical battery, ever.** No real cell measured, no real fault detected, no public
-  dataset ingested. Every Tier 1/2 result is conditional on models that have never touched
-  a cell. This is the largest gap in the project.
+- **No physical battery validates this.** v0.6 ran the observer against one real cell (Oxford
+  Cell1) and it *refused* — the first-order ECM's capacity estimate was wrong in sign (+10.5%
+  against a measured −24.2% fade, ≈1150σ from truth), REFUSE_MODEL_BIAS on all 13 scored ages
+  (§7.1, [REAL_CELL.md](REAL_CELL.md)). That is contact, not validation: one cell of eight, no
+  fault detected, the ECM confirmed nowhere. Every Tier 1/2 result remains conditional on models
+  that have otherwise not touched a cell. This is still the largest gap in the project.
 - **The OCV curves are stand-ins.** `NMC_LIKE` uses a Li-polymer fit; `LFP_LIKE` is
   hand-built. Every SNR and CRLB is a statement about *this model*. Replace `cell/ocv.py`
   with measured tables before quoting a figure elsewhere.
@@ -267,9 +271,14 @@ why. The complete ledger is [LIMITATIONS.md](../LIMITATIONS.md); the essentials:
 
 Only for the faults this machinery says are worth chasing and can be trusted:
 
-1. **A measured pseudo-OCV and pulse response** — a real bench. The step every version has
-   pointed at, and the only one that moves anything to Tier 3. No simulation, however
-   faithful, substitutes for it.
+1. **More real cells, and a better observer for them.** v0.6 took the first measured-cell step:
+   `plant/oxford.py` turns the Oxford Battery Degradation Dataset into a measured pseudo-OCV and
+   a 1C-discharge pair, and `examples/08` scored the observer against the dataset's own measured
+   fade on Oxford Cell1 — where the first-order ECM came back directionally wrong and AstraCell
+   refused every age (REFUSE_MODEL_BIAS 13/13; [REAL_CELL.md](REAL_CELL.md),
+   [LIMITATIONS §16](../LIMITATIONS.md)). That is contact, not validation. The next step is the
+   other seven cells, a same-day baseline, and an observer that can express real OCV drift — to
+   learn whether the refusal ever becomes a trustworthy diagnosis.
 2. **DFN with degradation submodels**, and **injected capacity fade** — which requires
    giving up the shared-OCV control that currently isolates dynamic mismatch, so it is a
    larger change than it looks.

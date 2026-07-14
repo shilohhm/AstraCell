@@ -19,7 +19,9 @@ run (§6).
 
 The core (`identifiability`, `mismatch`, `calibration`) is **numpy-only**. PyBaMM is an
 optional dependency; without it, the external-plant example/tests/notebooks skip cleanly
-and the base install is unaffected. All Monte Carlo is seeded: a
+and the base install is unaffected. The Oxford real-cell path (`examples/08`, the `oxford`
+tests) is a second optional extra — `.[oxford]` (scipy + h5py) plus the licensed dataset — and
+skips just as cleanly without either. All Monte Carlo is seeded: a
 `(scenario, n_trials, seed)` triple yields **bit-identical** arrays, asserted in
 `tests/test_calibration.py`.
 
@@ -30,7 +32,7 @@ and the base install is unaffected. All Monte Carlo is seeded: a
 ```bash
 git clone <repository-url> astracell
 cd astracell
-git checkout v0.4          # or the latest release tag; the science is unchanged since v0.4
+git checkout v0.4          # or the latest release tag; core science unchanged since v0.4 (v0.5 packaged, v0.6 added real-cell tooling)
 
 python -m venv .venv
 # Windows:
@@ -40,6 +42,9 @@ python -m venv .venv
 
 # optional: the external PyBaMM plant, for examples 06-07 and notebooks 03-04
 .venv/Scripts/python -m pip install -e ".[pybamm]"
+
+# optional: the Oxford real-cell loader (scipy + h5py), for example 08 and the oxford tests
+.venv/Scripts/python -m pip install -e ".[oxford]"    # then: python scripts/fetch_oxford.py
 ```
 
 Or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[dev,notebook]"`.
@@ -55,9 +60,9 @@ Throughout this document `PY` means `.venv/Scripts/python` (Windows) or
 | command | expected result |
 |---|---|
 | `$PY -m ruff check src tests examples scripts` | `All checks passed!` |
-| `$PY -m mypy` | `Success: no issues found in 41 source files` |
-| `$PY -m pytest` | `226 passed` (~100 s, with PyBaMM installed) |
-| `$PY -m pytest -m "not pybamm"` | `212 passed, 14 deselected` (the base-install guarantee) |
+| `$PY -m mypy` | `Success: no issues found in 42 source files` |
+| `$PY -m pytest` | `235 passed, 1 skipped` (~100 s, PyBaMM installed; the skip is the real-cell test, which needs the Oxford dataset — with it present, `236 passed`) |
+| `$PY -m pytest -m "not pybamm and not oxford"` | `220 passed, 16 deselected` (the base-install guarantee — no optional deps, no dataset) |
 | `$PY -m pytest -m pybamm` | `14 passed` (needs PyBaMM) |
 | `make check` | runs ruff + mypy + pytest together |
 
@@ -71,7 +76,7 @@ configuration, and say so.
 ## 3. Regenerate every figure and headline number
 
 Each example prints its numbers to stdout and writes its figures to `reports/figures/`.
-Run all seven to regenerate the full set (examples 06–07 require PyBaMM):
+Run all eight to regenerate the full set (06–07 require PyBaMM; 08 needs the Oxford dataset):
 
 | command | prints | writes |
 |---|---|---|
@@ -82,8 +87,10 @@ Run all seven to regenerate the full set (examples 06–07 require PyBaMM):
 | `$PY examples/05_calibrated_abstention.py` | coverage, overclaim, more-data-worse | `calibration_*` |
 | `$PY examples/06_external_plant_gate.py` | PyBaMM phantom fault, coverage collapse | `external_*` |
 | `$PY examples/07_external_positive_control.py` | fault recovery, confounder refusal | `positive_control_*` |
+| `$PY examples/08_real_cell.py` | real-cell capacity estimate vs measured fade (Tier 3) | `real_cell_capacity` *(only with the Oxford dataset)* |
 
-25 PNGs are written in total. The canonical subset featured in the docs is listed in
+25 PNGs are written in total; example 08 adds a 26th (`real_cell_capacity.png`) only when the
+Oxford dataset is present. The canonical subset featured in the docs is listed in
 [FIGURES.md](FIGURES.md).
 
 ---
@@ -112,13 +119,13 @@ the sequence and the pass condition.
 
 ```
  0. git status --porcelain                     # empty: start clean
- 1. make check                                 # ruff + mypy + pytest (226 passed)
- 2. examples 01-07 each exit 0                  # regenerates all 25 figures + prints numbers
- 3. $PY -m pytest -m "not pybamm"               # 212 passed, 14 deselected: the base-install guarantee
-    (stronger form: move site-packages/pybamm aside, then `pytest` still exits 0 — 14 skip)
+ 1. make check                                 # ruff + mypy + pytest (235 passed, 1 skipped)
+ 2. examples 01-08 each exit 0                  # 01-07 regenerate 25 figures; 08 skips without the dataset
+ 3. $PY -m pytest -m "not pybamm and not oxford" # 220 passed, 16 deselected: the base-install guarantee
+    (stronger form: move site-packages/pybamm aside, then `pytest` still exits 0 — the optional tests skip)
  4. make notebook && make notebook-run          # strip then restore notebook outputs
     $PY -m pytest tests/test_notebooks.py       # committed notebooks retain outputs, last run error-free
- 5. figure regeneration confirmed               # reports/figures/ holds 25 PNGs after step 2
+ 5. figure regeneration confirmed               # reports/figures/ holds 25 PNGs after step 2 (26 with the Oxford dataset)
  6. stale-number grep (§6)                       # every pinned number still matches a live run
  7. git status --porcelain                      # empty except the changes you intend to ship
 ```
@@ -149,4 +156,5 @@ change it here too.
 | matched-model coverage tracks nominal; mismatch variance-only coverage **0%**; harmful overclaim on capacity **100% → 0%** | report | `examples/05_calibrated_abstention.py` |
 | PyBaMM healthy cell: residual **20.65 mV**, phantom capacity **−67.6% ± 0.145%** (466σ); ECM control deviates ≤ **0.011** from nominal | report | `examples/06_external_plant_gate.py` |
 | paired estimator recovers an injected fault at **+20.0000%**; confounder refused, capacity at **1.98σ** vs a 2.00σ line; lack-of-fit screen captures **31%** of known bias; true-positive rate **0.94** | report | `examples/07_external_positive_control.py` |
-| test suite: **226** total = **212** pass + **14** skip without PyBaMM | README, report | `pytest`, `pytest -m "not pybamm"` |
+| test suite: **236** total; **235** pass + **1** skip with PyBaMM (real-cell test needs the dataset; **236** pass with it); base install **220** pass + **16** deselect | README, report | `pytest`, `pytest -m "not pybamm and not oxford"` |
+| real-cell (Tier 3): Oxford Cell1 measured fade **−24.2%**; ECM estimate wrong in sign (**+10.5%**), **REFUSE_MODEL_BIAS 13/13**, coverage **0/13** | REAL_CELL, CLAIMS C19 | `examples/08_real_cell.py` *(needs the licensed dataset)* |

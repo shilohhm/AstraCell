@@ -608,3 +608,83 @@ giving up the control or fitting the OCV too, and both are larger changes than v
 Also absent: SEI growth, thermal coupling, pack scale, DFN, more than one chemistry parameter set,
 more than one duty cycle, and any measured cell whatsoever. PyBaMM remains a model, the fault remains
 one we injected into it, and the next honest step remains the one every version has pointed at.
+
+---
+
+## 16. The real cell is contact, not validation
+
+Every section above ends the same way: the next honest step is a *measured* cell, which no
+simulation can stand in for. v0.6 takes that step. It runs the observer against the **Oxford Battery
+Degradation Dataset** — eight real Kokam 740 mAh cells cycled to end of life — and scores the
+capacity estimate against each age's **measured** fade. For the first time the ground truth is a
+number nobody in this project chose, and the first run is done: on Cell1 the ECM's estimate is wrong
+in *sign* and AstraCell refuses all 13 scored ages. `docs/REAL_CELL.md` carries the numbers, the
+figure, and the how-to-run; what follows is what that result does *not* settle.
+
+### 16a. The first real run has happened — and it refused
+
+The run exists, on Oxford Cell1: a measured fade to **−24.2%** over 78 ages, the first-order ECM's
+capacity estimate wrong in sign (a **+10.5%** "gain" at end of life), and `REFUSE_MODEL_BIAS` on all
+13 scored ages (coverage **0/13**), in both OCV modes. Two things keep this honest. First, the
+numbers are **not committed**: the ODC-ODbL data is a licensed ~266 MB download that never enters the
+repo, so the offline test suite exercises the whole pipeline on *synthetic* Oxford-format data and
+`examples/08` skips cleanly without the file — the repo stays green, and anyone reproducing the real
+numbers fetches the data themselves. Second, and larger: a refusal on one cell is a *contact*, not a
+*validation*. It shows AstraCell abstains where it should; it says nothing about whether the ECM is
+right anywhere, because a system that refuses a real cell has still never confirmed one. What keeps
+the refusal from being vacuous is §16d — the same estimator provably recovers a fault it *can*
+express.
+
+### 16b. What the real-cell result does, and does not, mean
+
+The result exists now, and it is **contact, not validation**:
+
+- **One cell of eight**, one chemistry, one duty cycle. A single cell cannot separate a property of
+  *this* cell from a property of the observer.
+- **The observer is still a first-order Thevenin ECM.** Everything §12 and §14 say about model-order
+  bias applies with more force to a real cell, which has hysteresis, path dependence, and solid-phase
+  diffusion the ECM cannot express. A real cell should mismatch the ECM at least as badly as PyBaMM
+  did (§14b).
+- **The fit is isothermal.** The observer ignores the 40 °C thermal history and the temperature
+  dependence the dataset actually carries in its `T` channel; `dOCV/dT` is set to zero because a
+  room-temperature pseudo-OCV sweep does not measure it.
+- **The baseline is a real but imperfect fingerprint.** §15d named the identical-simulation baseline
+  as impossible in a workshop; the dataset supplies the honest alternative — the earliest
+  characterisation age — but that age is a *different day and temperature history* from every later
+  one, so the paired differential now carries baseline drift the synthetic control never had. That
+  is more realistic and strictly harder, not a free upgrade.
+- **The ECM cannot represent the ends of the SOC range.** The observer re-integrates only within
+  `SOC ∈ [~0.02, 0.98]`, so the paired window discards the top ~2 % of charge a full 1C discharge
+  spans, and must stay above ~0.03 at the other end. A real full-discharge curve lives partly where
+  the model structurally cannot follow it — itself a source of lack-of-fit, expected and not hidden.
+- **No fault is injected or detected.** The dataset's ageing is real capacity fade scored against its
+  own measurement, not a labelled fault-detection benchmark. AstraCell is being asked whether it
+  *knows what it cannot see* on a real cell, not whether it can classify a named fault.
+
+### 16c. The run corrected the Readme — the file, not the docstring, is the authority
+
+"The scales are overridable should the file surprise us" was not idle: it did. The Readme states time
+`t` is in **seconds**; the file stores a **MATLAB datenum in days** — Cell1's first sample is
+735954.82, and day 735954 is 2015-01-08, exactly the Readme's own "Start date of tests". Read as
+seconds, the derived 1C current came out near **64000 A** and the fit window collapsed to zero; the
+run caught in one line what the Readme got wrong. The scale is now `_TIME_TO_S = 86400`, pinned in
+`tests/test_oxford.py` against that embedded date, alongside the mAh→Ah and `dq/dt`→amps conversions.
+The file also proved to be an old-format `.mat` that scipy reads directly (not the v7.3/HDF5 the
+Readme implies), and its slow pseudo-OCV repeats SOC where the 1 Hz charge counter holds, so
+`pseudo_ocv_curve` collapses exact duplicates before building the table. Every one of these was
+invisible to the synthetic tests and visible on first contact with the file — which is the whole
+argument for running against real data rather than trusting its documentation.
+
+### 16d. Why the refusal means something rather than nothing
+
+§15 is the cautionary tale: v0.3 refused everything and could not tell, because a refusal is only
+evidence if the *same* machinery provably diagnoses a fault it can express. That positive control
+exists and travels with this work. The identical paired estimator recovers an in-span capacity change
+on ECM-generated data to within its curvature (`tests/test_oxford.py::test_adapter_pair_is_self_
+consistent`), and recovered a real PyBaMM contact-resistance fault at `+20.0000%` (C14). So the
+refusal on Cell1 is not the refuse-everything failure of v0.3: it happens because a real cell presents
+a change this observer genuinely cannot express — lack-of-fit 91 → 815, not the ≈0 of an expressible
+change. And the per-age-OCV control against the shared-OCV headline (both in `examples/08`) does its
+job of catching a stuck "refuses always" gate: the two modes *disagree* in magnitude (+10.5% vs
++17.1% at end of life), so the machinery is discriminating, not frozen. What it discriminates toward
+is still refusal — correctly, on a cell it cannot model — but it is refusal with its eyes open.

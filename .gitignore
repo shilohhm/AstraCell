@@ -20,3 +20,7 @@ reports/figures/
 # Notebook outputs. The notebook is a build artifact of scripts/build_notebook.py;
 # committing executed outputs would let stale numbers survive a code change.
 # Strip with: nbstripout notebooks/*.ipynb
+
+# Real-cell datasets (v0.6). The Oxford Battery Degradation Dataset is ODC-ODbL and ~254 MB;
+# scripts/fetch_oxford.py fetches it here and it is NEVER committed. See docs/REAL_CELL.md.
+data/
