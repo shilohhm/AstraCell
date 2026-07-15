@@ -32,6 +32,7 @@ of Oxford, DOI ``10.5287/bodleian:KO2kdmYGg``, released under the ODC Open Datab
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -281,16 +282,40 @@ def _age_from_fields(
 def load_cell(path: str, cell: str = "Cell1") -> dict[int, OxfordAge]:
     """Load one cell's characterisation ages from the Oxford ``.mat`` file.
 
-    Requires the optional ``[oxford]`` extra and the downloaded data (``scripts/fetch_oxford.py``).
-    The 254 MB file is MATLAB v7.3 (HDF5) in practice, so ``scipy.io.loadmat`` will refuse it and we
-    fall back to ``h5py``; both paths are handled. Navigates ``cell -> cycNNNN -> {OCVdc, C1dc}``.
-
-    The unit assumptions in ``_age_from_fields`` (``q`` in mAh, ``t`` in seconds) are confirmed
-    against the dataset Readme; the end-to-end run against the real file is the final check, and the
-    scales are overridable there should a future dataset differ. This function is deliberately not
-    imported at module top level so the pure core needs no optional dependency.
+    A single-cell convenience wrapper over :func:`load_cells` -- v0.6's entry point, kept for the
+    tests and any caller that wants exactly one cell. **Scoring several cells? Call ``load_cells``
+    once instead of this N times:** the 254 MB file is re-read on every call, and ``examples/08``
+    scores all eight, so one pass matters. Both paths share ``_ages_from_struct``, so a single- and
+    a multi-cell load of the same cell cannot drift apart.
     """
-    struct = _read_mat_cell(path, cell)
+    return load_cells(path, (cell,))[cell]
+
+
+def load_cells(path: str, cells: Sequence[str]) -> dict[str, dict[int, OxfordAge]]:
+    """Load several cells from a **single** read of the Oxford ``.mat`` file.
+
+    Requires the optional ``[oxford]`` extra and the downloaded data (``scripts/fetch_oxford.py``).
+    The 254 MB file is MATLAB v7.3 (HDF5) in some releases, so ``scipy.io.loadmat`` may refuse it
+    and we fall back to ``h5py``; both paths are handled, and either way the file is opened once no
+    matter how many cells are asked for. Navigates ``cell -> cycNNNN -> {OCVdc, C1dc}`` for each.
+
+    The unit assumptions in ``_age_from_fields`` (``q`` in mAh, ``t`` a datenum in days) are
+    confirmed against the real file by the end-to-end run and pinned in ``tests/test_oxford.py``;
+    the scales are overridable there should a future dataset differ. Deliberately not imported at
+    module top level so the pure core needs no optional dependency. Returns ``{cell: {cyc:
+    OxfordAge}}`` in request order.
+    """
+    structs = _read_mat_cells(path, cells)
+    return {cell: _ages_from_struct(structs[cell], cell=cell, path=path) for cell in cells}
+
+
+def _ages_from_struct(struct: _Nested, *, cell: str, path: str) -> dict[int, OxfordAge]:
+    """Assemble one cell's ``{cyc: OxfordAge}`` from its walked struct, dropping incomplete cycles.
+
+    Shared by the single- and multi-cell loaders so the cycle-selection and unit handling live in
+    exactly one place. A cycle missing either discharge half (``OCVdc``/``C1dc``) is skipped rather
+    than fabricated; a cell with none left is an error, not an empty result.
+    """
     ages: dict[int, OxfordAge] = {}
     for key, cyc_struct in struct.items():
         if not key.startswith("cyc"):
@@ -307,11 +332,13 @@ def load_cell(path: str, cell: str = "Cell1") -> dict[int, OxfordAge]:
     return dict(sorted(ages.items()))
 
 
-def _read_mat_cell(path: str, cell: str) -> _Nested:
-    """Read ``cell -> cyc -> field -> {t,v,q,T}`` as nested dicts, via scipy or (v7.3) h5py.
+def _read_mat_cells(path: str, cells: Sequence[str]) -> dict[str, _Nested]:
+    """Read ``cell -> cyc -> field -> {t,v,q,T}`` for several cells from one open of the file.
 
-    Isolated so the two MATLAB-format code paths -- and their differing struct-access idioms -- are
-    the only place that depends on the file format. Not exercised by the offline test suite.
+    One ``loadmat`` (or one ``h5py.File``) serves every requested cell, so the 254 MB file is read
+    exactly once regardless of how many cells the caller wants. Isolated so the two MATLAB-format
+    code paths -- and their differing struct-access idioms -- are the only place that depends on the
+    file format. Not exercised by the offline test suite.
     """
     try:
         from scipy.io import loadmat
@@ -322,12 +349,12 @@ def _read_mat_cell(path: str, cell: str) -> _Nested:
 
     try:
         mat = loadmat(path, squeeze_me=True, struct_as_record=False)
-        return _walk_scipy_struct(mat[cell])
+        return {cell: _walk_scipy_struct(mat[cell]) for cell in cells}
     except NotImplementedError:  # v7.3 files are HDF5; scipy cannot read them
         import h5py
 
         with h5py.File(path, "r") as handle:
-            return _walk_h5_struct(handle, cell)
+            return {cell: _walk_h5_struct(handle, cell) for cell in cells}
 
 
 def _walk_scipy_struct(cell_obj: object) -> _Nested:

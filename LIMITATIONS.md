@@ -614,22 +614,25 @@ one we injected into it, and the next honest step remains the one every version 
 ## 16. The real cell is contact, not validation
 
 Every section above ends the same way: the next honest step is a *measured* cell, which no
-simulation can stand in for. v0.6 takes that step. It runs the observer against the **Oxford Battery
-Degradation Dataset** — eight real Kokam 740 mAh cells cycled to end of life — and scores the
-capacity estimate against each age's **measured** fade. For the first time the ground truth is a
-number nobody in this project chose, and the first run is done: on Cell1 the ECM's estimate is wrong
-in *sign* and AstraCell refuses all 13 scored ages. `docs/REAL_CELL.md` carries the numbers, the
+simulation can stand in for. v0.6 took that step and v0.7 widened it to the whole dataset. It runs
+the observer against the **Oxford Battery Degradation Dataset** — eight real Kokam 740 mAh cells
+cycled to end of life — and scores the capacity estimate against each age's **measured** fade. The
+ground truth is a number nobody in this project chose, and the run is now done on all eight cells:
+every cell fades 20–38%, the first-order ECM reports a capacity *gain*, and AstraCell refuses all 104
+scored ages in both OCV modes (208/208 evaluations). `docs/REAL_CELL.md` carries the numbers, the
 figure, and the how-to-run; what follows is what that result does *not* settle.
 
-### 16a. The first real run has happened — and it refused
+### 16a. The run has happened, on all eight cells — and every one refused
 
-The run exists, on Oxford Cell1: a measured fade to **−24.2%** over 78 ages, the first-order ECM's
-capacity estimate wrong in sign (a **+10.5%** "gain" at end of life), and `REFUSE_MODEL_BIAS` on all
-13 scored ages (coverage **0/13**), in both OCV modes. Two things keep this honest. First, the
-numbers are **not committed**: the ODC-ODbL data is a licensed ~266 MB download that never enters the
-repo, so the offline test suite exercises the whole pipeline on *synthetic* Oxford-format data and
-`examples/08` skips cleanly without the file — the repo stays green, and anyone reproducing the real
-numbers fetches the data themselves. Second, and larger: a refusal on one cell is a *contact*, not a
+The run exists, on all eight Oxford cells: every cell fades **20–38%** (Cell1 to −24.2%), the
+first-order ECM's capacity estimate wrong in sign on **7 of 8** (a +10.5% "gain" at Cell1's end of
+life; the eighth, Cell5, collapses to ≈0% at a vanishing σ, still tens of points from its −38% fade),
+and `REFUSE_MODEL_BIAS` on **all 104 scored ages, coverage 0/104, in both OCV modes** (208/208
+evaluations — no other verdict kind appears). Two things keep this honest. First, the numbers are
+**not committed**: the ODC-ODbL data is a licensed ~266 MB download that never enters the repo, so the
+offline test suite exercises the whole pipeline on *synthetic* Oxford-format data and `examples/08`
+skips cleanly without the file — the repo stays green, and anyone reproducing the real numbers fetches
+the data themselves. Second, and larger: a refusal, even on eight cells, is a *contact*, not a
 *validation*. It shows AstraCell abstains where it should; it says nothing about whether the ECM is
 right anywhere, because a system that refuses a real cell has still never confirmed one. What keeps
 the refusal from being vacuous is §16d — the same estimator provably recovers a fault it *can*
@@ -639,8 +642,10 @@ express.
 
 The result exists now, and it is **contact, not validation**:
 
-- **One cell of eight**, one chemistry, one duty cycle. A single cell cannot separate a property of
-  *this* cell from a property of the observer.
+- **Eight cells, but one chemistry and one duty cycle.** v0.7 scored all eight (v0.6 ran one), so the
+  phantom and the refusal recur on every cell rather than resting on a single one — they are no longer
+  attributable to *this* cell. But all eight are the same Kokam pouch on the same 40 °C Artemis cycle:
+  this is breadth within one chemistry, not across chemistries, formats, or duty cycles.
 - **The observer is still a first-order Thevenin ECM.** Everything §12 and §14 say about model-order
   bias applies with more force to a real cell, which has hysteresis, path dependence, and solid-phase
   diffusion the ECM cannot express. A real cell should mismatch the ECM at least as badly as PyBaMM
@@ -682,9 +687,11 @@ evidence if the *same* machinery provably diagnoses a fault it can express. That
 exists and travels with this work. The identical paired estimator recovers an in-span capacity change
 on ECM-generated data to within its curvature (`tests/test_oxford.py::test_adapter_pair_is_self_
 consistent`), and recovered a real PyBaMM contact-resistance fault at `+20.0000%` (C14). So the
-refusal on Cell1 is not the refuse-everything failure of v0.3: it happens because a real cell presents
-a change this observer genuinely cannot express — lack-of-fit 91 → 815, not the ≈0 of an expressible
+refusal on every one of the eight cells is not the refuse-everything failure of v0.3: it happens
+because a real cell presents a change this observer genuinely cannot express — differential
+lack-of-fit in the hundreds (636–1151 at end of life across the eight), not the ≈0 of an expressible
 change. And the per-age-OCV control against the shared-OCV headline (both in `examples/08`) does its
-job of catching a stuck "refuses always" gate: the two modes *disagree* in magnitude (+10.5% vs
-+17.1% at end of life), so the machinery is discriminating, not frozen. What it discriminates toward
+job of catching a stuck "refuses always" gate: the two modes *disagree* in magnitude (e.g. +10.5% vs
++17.1% at Cell1's end of life), so the machinery is discriminating, not frozen. What it discriminates
+toward
 is still refusal — correctly, on a cell it cannot model — but it is refusal with its eyes open.

@@ -185,9 +185,9 @@ def test_load_cell_parses_a_synthetic_oxford_mat(tmp_path: Path) -> None:
 
     The 254 MB dataset is v7.3/HDF5 and takes the h5py branch, which needs the download; but the
     scipy branch and the struct navigation are the same logic and are testable here on a small
-    old-format .mat that scipy can write. This covers load_cell -> _read_mat_cell -> _walk_scipy_
-    struct -> _age_from_fields end to end -- including the mAh->Ah scaling through the real reader,
-    not just the pure helper -- with no download and no fabricated data.
+    old-format .mat that scipy can write. This covers load_cell -> load_cells -> _read_mat_cells ->
+    _walk_scipy_struct -> _age_from_fields end to end -- including the mAh->Ah scaling through the
+    real reader, not just the pure helper -- with no download and no fabricated data.
     """
     scipy_io = pytest.importorskip("scipy.io")
 
@@ -214,6 +214,48 @@ def test_load_cell_parses_a_synthetic_oxford_mat(tmp_path: Path) -> None:
     assert ages[300].capacity_ah == pytest.approx(0.66, abs=1e-3)
     assert measured_fade(ages[100], ages[300]) == pytest.approx((0.66 - 0.74) / 0.74, abs=1e-3)
     assert ages[100].soc.min() >= 0.0 and ages[100].soc.max() <= 1.0
+
+
+@pytest.mark.oxford
+def test_load_cells_reads_every_cell_in_one_pass(tmp_path: Path) -> None:
+    """``load_cells`` reads a multi-cell file once and agrees with ``load_cell`` per cell.
+
+    ``examples/08`` scores all eight cells; ``load_cells`` exists so the 254 MB file is opened once
+    rather than once per cell. This drives the multi-cell path on a synthetic two-cell file: both
+    cells come back, keyed and sorted, in the requested order, and each matches what the single-cell
+    wrapper returns -- the guarantee that lets the example trust one pass over eight.
+    """
+    scipy_io = pytest.importorskip("scipy.io")
+
+    def discharge(cap_ah: float, n: int = 200) -> dict[str, np.ndarray]:
+        return {
+            "t": np.linspace(0.0, 3600.0, n),
+            "v": np.linspace(4.1, 2.7, n),
+            "q": np.linspace(0.0, cap_ah * 1000.0, n),  # cumulative charge removed, mAh
+            "T": np.full(n, 40.0),
+        }
+
+    mat = {
+        "Cell1": {"cyc0100": {"C1dc": discharge(0.74), "OCVdc": discharge(0.74)}},
+        "Cell2": {
+            "cyc0100": {"C1dc": discharge(0.73), "OCVdc": discharge(0.73)},
+            "cyc0500": {"C1dc": discharge(0.61), "OCVdc": discharge(0.61)},
+        },
+    }
+    path = tmp_path / "multi.mat"
+    scipy_io.savemat(str(path), mat)
+
+    from astracell.plant.oxford import load_cell, load_cells
+
+    got = load_cells(str(path), ["Cell2", "Cell1"])  # request order preserved, not file order
+    assert list(got) == ["Cell2", "Cell1"]
+    assert sorted(got["Cell1"]) == [100]
+    assert sorted(got["Cell2"]) == [100, 500]
+    assert got["Cell2"][500].capacity_ah == pytest.approx(0.61, abs=1e-3)  # mAh -> Ah, second cell
+    # One pass over two cells must equal two single-cell loads: the shared assembly cannot drift.
+    solo = load_cell(str(path), "Cell2")
+    assert sorted(solo) == sorted(got["Cell2"])
+    assert solo[500].capacity_ah == pytest.approx(got["Cell2"][500].capacity_ah)
 
 
 @pytest.mark.oxford

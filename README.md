@@ -59,7 +59,7 @@ claim at a higher one.
 |---|---|---|
 | **1 — internal self-consistency and synthetic experiments** | Within AstraCell's own models, plus theorems about the estimator | Extensive |
 | **2 — independently developed external simulator** | Against PyBaMM, a simulator AstraCell did not implement | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault | **Contact, not validation.** v0.6 ran it: on a real cell the ECM is directionally wrong and AstraCell refuses ([REAL_CELL](docs/REAL_CELL.md)) — one cell, not validation |
+| **3 — physical battery validation** | A measured cell, a real fault | **Contact, not validation.** v0.7 ran all eight cells: the ECM is directionally wrong on every one and AstraCell refuses all 208 evaluations ([REAL_CELL](docs/REAL_CELL.md)) — eight cells, not validation |
 
 ## What the evidence shows
 
@@ -112,10 +112,11 @@ The rest of the argument, each finding linked to its example, test, and figure i
 
   ![positive control](reports/figures/positive_control_rates.png)
 
-- **On a real cell, it refuses — and it should.** Run against a measured Oxford cell fading to
-  −24.2%, the first-order ECM's capacity estimate comes back wrong in *sign* (a +10.5% "gain"),
-  ~1150σ from the truth; AstraCell returns `REFUSE_MODEL_BIAS` on all 13 scored ages (coverage
-  0/13). First contact with a battery, and the honest outcome. *(`examples/08`,
+- **On real cells, it refuses — and it should.** Run against all eight measured Oxford cells, each
+  fading 20–38%, the first-order ECM's capacity estimate comes back wrong in *sign* — a phantom
+  *gain* on seven of eight (+10.5% at Cell1's end of life against a −24.2% fade, ~1150σ from truth);
+  AstraCell returns `REFUSE_MODEL_BIAS` on all 104 scored ages in both OCV modes (coverage 0/104,
+  208/208 evaluations). Eight-cell contact with a battery, and the honest outcome. *(`examples/08`,
   [REAL_CELL](docs/REAL_CELL.md))*
 
 ## Install and run
@@ -140,7 +141,7 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/07_external_positive_control.py` | and when that cell is really broken, does it notice? |
 | `pip install -e ".[oxford]"` · `python scripts/fetch_oxford.py` | add the Oxford real-cell dataset (ODC-ODbL, ~254 MB licensed download) |
 | `python examples/08_real_cell.py` | Tier 3: score the observer against a real cell's measured fade (skips without the data) |
-| `python -m pytest` | 236 tests, ~100 s (235 pass + 1 skip with PyBaMM; the real-cell test needs the Oxford dataset) |
+| `python -m pytest` | 237 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
 | `python -m ruff check src tests examples scripts` · `python -m mypy` | lint · type-check |
 
 `make check` runs lint + typecheck + test; `make help` lists every target. The full
@@ -207,12 +208,14 @@ mean anything.
 
 There is still no residual bank, no classifier, no dashboard, and no LLM — and no *validated*
 real-cell result. Those come after, and only for the faults this machinery says are worth chasing
-and can be trusted. **v0.6 takes the measured-cell step** every prior version pointed at: run against
-the Oxford Battery Degradation Dataset, the first-order ECM's capacity estimate on a real cell comes
-back wrong in sign — a +10.5% "gain" against a measured −24.2% loss — and AstraCell refuses all 13
-scored ages. Worse than any synthetic tier, and the honest outcome: the refusal is the result. It is
-contact, not validation — one cell of eight. See [REAL_CELL.md](docs/REAL_CELL.md), the
-[technical report](docs/TECHNICAL_REPORT.md) §7, and [LIMITATIONS.md](LIMITATIONS.md) §16.
+and can be trusted. **v0.6 took the measured-cell step** every prior version pointed at, and **v0.7
+widened it to all eight cells** of the Oxford Battery Degradation Dataset: every cell fades 20–38%,
+the first-order ECM's capacity estimate comes back wrong in sign — a phantom *gain* on seven of eight
+(+10.5% against Cell1's −24.2% loss) — and AstraCell refuses all 104 scored ages in both OCV modes
+(208/208 evaluations). Worse than any synthetic tier, and the honest outcome: the refusal is the
+result, now eight cells over. It is contact, not validation — eight cells, one chemistry. See
+[REAL_CELL.md](docs/REAL_CELL.md), the [technical report](docs/TECHNICAL_REPORT.md) §7, and
+[LIMITATIONS.md](LIMITATIONS.md) §16.
 
 ## License
 

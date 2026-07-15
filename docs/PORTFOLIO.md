@@ -37,10 +37,11 @@ An identifiability engine (Fisher/CRLB) with two ordered gates — separability 
 detectability (SNR) — that returns DIAGNOSE, WEAK, or one of three refusals, each with a
 recommendation where one exists (instrument a cell, or excite it harder). Around it: a
 model-bias gate that prices the observer's own structural error, an estimator, a Monte
-Carlo calibration harness, an external PyBaMM plant, a positive control, and — in v0.6 — a
-real-cell run against the Oxford dataset — on one cell the first-order ECM is directionally
-wrong and AstraCell refuses it. The core is numpy-only; 236 tests assert theorems, not observed
-numbers. Built in five science passes (v0.0 → v0.4), since packaged and taken to a measured cell.
+Carlo calibration harness, an external PyBaMM plant, a positive control, and — in v0.6–v0.7 — a
+real-cell run across all eight cells of the Oxford dataset — on every cell the first-order ECM is
+directionally wrong and AstraCell refuses it. The core is numpy-only; 237 tests assert theorems, not
+observed numbers. Built in five science passes (v0.0 → v0.4), since packaged and taken to eight
+measured cells.
 
 ## How I know it works
 
@@ -77,11 +78,12 @@ positive only when the interval actually covers the truth.
 
 Equally important, and stated plainly rather than buried.
 
-**No physical battery validates any of this.** v0.6 finally ran the observer against a real
-measured cell (Oxford Cell1) — and it refused: the first-order ECM's capacity estimate came back
-wrong in *sign* (a +10.5% "gain" against a measured −24.2% fade, ≈1150σ from truth),
-REFUSE_MODEL_BIAS on all 13 scored ages. That is **contact, not validation** — one cell of eight,
-no fault detected, the ECM confirmed nowhere; the refusal is the honest result, not a green light.
+**No physical battery validates any of this.** v0.6 first ran the observer against a real measured
+cell and v0.7 widened it to all eight (Oxford Cell1–8) — and it refused every one: the first-order
+ECM's capacity estimate came back wrong in *sign* on seven of eight (a +10.5% "gain" against Cell1's
+measured −24.2% fade, ≈1150σ from truth), REFUSE_MODEL_BIAS on all 104 scored ages in both OCV modes
+(208/208). That is **contact, not validation** — eight cells but one chemistry, no fault detected,
+the ECM confirmed nowhere; the refusal is the honest result, not a green light.
 Every Tier 1/2 result above is still conditional on models that have otherwise not touched a cell —
 the OCV curves are stand-ins, so every SNR is a statement about a model, not a battery. The Cramér–Rao bound is variance-only and blind to
 model bias by construction; the screen I use to catch that bias externally is a *screen, not
@@ -98,11 +100,12 @@ readiness.** This is a research scaffold for the identifiability question.
 ## What I would do next
 
 Only for the faults this machinery certifies as answerable and trustworthy. First and above
-all, **more real cells, and a better observer for them.** v0.6 ran one (Oxford Cell1); the
-first-order ECM came back directionally wrong and AstraCell refused every age — the prediction
-that a real cell would mismatch the ECM harder than PyBaMM did, now measured. The honest next
-step is the other seven cells, a same-day baseline, and an observer that can express real OCV
-drift — to learn whether the refusal ever becomes a trustworthy diagnosis. That is the only path
+all, **more chemistries, and a better observer for them.** v0.6 ran one cell and v0.7 ran all eight
+(Oxford Cell1–8); the first-order ECM came back directionally wrong on every one and AstraCell refused
+every age — the prediction that a real cell would mismatch the ECM harder than PyBaMM did, now measured
+eight times over. The honest next step is a same-day baseline, other chemistries and formats, and an
+observer that can express real OCV drift — to learn whether the refusal ever becomes a trustworthy
+diagnosis. That is the only path
 that moves anything to Tier 3, and no simulation stands in for it. Then DFN with degradation
 submodels and injected capacity fade; ramped and concurrent faults; and, built last rather
 than first, a classifier — on the faults the identifiability layer has already certified.

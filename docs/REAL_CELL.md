@@ -1,4 +1,4 @@
-# Real-cell contact: the Oxford Battery Degradation Dataset (Tier 3, v0.6)
+# Real-cell contact: the Oxford Battery Degradation Dataset (Tier 3, v0.6–v0.7)
 
 Every result in this repository before v0.6 is synthetic. Tier 1 tests the ECM against itself and
 against a mismatch we hand-wrote; Tier 2 tests it against PyBaMM, an electrochemical simulator we
@@ -6,13 +6,13 @@ did not implement. Both are models. This document covers the machinery that lets
 observer run against **eight real lithium-ion cells** — and, just as importantly, everything that
 machinery still does *not* establish.
 
-> **v0.6 is contact, not validation.** The dataset is a licensed ~266 MB download that is **never
-> committed** to this repository. The [Results](#results-first-run-cell1-2026-07) below come from a
-> real run — one cell of eight, a first-order ECM, and a refusal on every age. You reproduce them by
-> fetching the data and re-running `examples/08`; the offline test suite exercises the whole pipeline
-> on *synthetic* Oxford-format data so it stays green without the download. This establishes that
-> AstraCell knows when it cannot trust the ECM on a real cell — and nothing broader. See
-> [CLAIMS.md](CLAIMS.md) C19 and [LIMITATIONS.md](../LIMITATIONS.md) §16.
+> **Contact, not validation.** The dataset is a licensed ~266 MB download that is **never
+> committed** to this repository. The [Results](#results-all-eight-cells-2026-07) below come from a
+> real run — v0.7 across **all eight cells**, a first-order ECM, and a refusal on every one of 208
+> evaluations. You reproduce them by fetching the data and re-running `examples/08`; the offline test
+> suite exercises the whole pipeline on *synthetic* Oxford-format data so it stays green without the
+> download. This establishes that AstraCell knows when it cannot trust the ECM on a real cell — and
+> nothing broader. See [CLAIMS.md](CLAIMS.md) C19 and [LIMITATIONS.md](../LIMITATIONS.md) §16.
 
 ## Why this is the right next step, and what makes it different
 
@@ -99,28 +99,33 @@ paired estimator, exactly as `examples/07` wires PyBaMM in.
 
 ## What this establishes, and what it does not
 
-- It **establishes** that AstraCell can ingest a real, measured cell and score its own capacity
-  estimate against a real fade — and it exposes the machinery to whatever a real cell does to a
-  first-order ECM. Whether the answer is refusal or diagnosis, it is the first answer in this
+- It **establishes** that AstraCell can ingest eight real, measured cells and score its own capacity
+  estimate against each one's real fade — and it exposes the machinery to whatever a real cell does to
+  a first-order ECM. The answer, on all eight, is refusal; either way it is the first answer in this
   repository that is not about a model.
 - It does **not** establish that the ECM is *right* about a real cell. Tier 3 here is **contact, not
-  validation**: one cell of eight, a first-order Thevenin observer, an isothermal fit that ignores
-  the 40 °C thermal history, a shared baseline that is a different day, and a paired window that
-  discards the ends of the SOC range the ECM cannot represent. Every reason to distrust a confident
-  diagnosis is present — which is exactly why a refusal, if that is what prints, is the point.
+  validation**: eight cells but one chemistry, a first-order Thevenin observer, an isothermal fit that
+  ignores the 40 °C thermal history, a shared baseline that is a different day, and a paired window
+  that discards the ends of the SOC range the ECM cannot represent. Breadth across the eight cells
+  does not touch any of those — it only shows the phantom and the refusal are not a Cell1 accident.
+  Every reason to distrust a confident diagnosis is present — which is exactly why the refusal, which
+  is what prints, is the point.
 - No physical *fault* is injected or detected. The dataset's ageing is real capacity fade, scored
   against its own measurement; it is not a labelled fault-detection benchmark.
 
 See [LIMITATIONS.md §16](../LIMITATIONS.md#16-the-real-cell-is-contact-not-validation) for the full
 account of what a real-cell result would and would not mean.
 
-## Results (first run: Cell1, 2026-07)
+## Results (all eight cells, 2026-07)
 
-From `examples/08_real_cell.py` on **Oxford Cell1** — 78 characterisation ages, 13 scored evenly
-across life, `SEED=0`. Data fetched 2026-07 (266 MB; SHA-256 `a8f0b928…cf26781`). Measured, not
-asserted: regenerate these and the figure by fetching the data and re-running the two commands above.
+From `examples/08_real_cell.py` on **all eight Oxford cells** — 46–78 characterisation ages each,
+13 aged ages scored per cell (**104 in total**), `SEED=0`. Data fetched 2026-07 (266 MB; SHA-256
+`a8f0b928…cf26781`). Measured, not asserted: regenerate these and the figure by fetching the data
+and re-running the two commands above.
 
-**The cell degrades; the first-order ECM says it gains capacity.**
+**Every cell fades; the first-order ECM reports a gain — and AstraCell refuses all 208 evaluations.**
+
+The worked example is **Cell1**, unchanged from v0.6's first run — one cell of the eight:
 
 | quantity | fresh (cyc0000) | end of life (cyc8200) |
 |---|---|---|
@@ -132,23 +137,41 @@ asserted: regenerate these and the figure by fetching the data and re-running th
 | differential lack-of-fit | — | 815 |
 | verdict | — | **REFUSE_MODEL_BIAS** |
 
-Across all 13 scored ages the naive ECM capacity estimate is not merely wrong in magnitude but
-**wrong in sign**: it reports a +1.9% → +10.5% capacity *gain* (shared OCV) while the cell loses
-3.7% → 24.2%. The variance-only interval is **±0.03%**, so the +10.5% estimate sits roughly
-**1150σ** from the −24.2% truth — exquisitely precise and catastrophically wrong, the
-confident-wrongness this whole project is built against. The differential lack-of-fit climbs
-91 → 815 (its contract: hundreds when the observer cannot reproduce a change), coverage of the
-measured fade is **0 / 13**, and AstraCell returns **REFUSE_MODEL_BIAS on every age, in both OCV
-modes (13/13)**. Re-measuring the pseudo-OCV at each age (the per-age control) does **not** rescue
-the estimate — it makes it worse (+17.1% at end of life), because the dominant mismatch is the
-first-order *dynamics*, not the moving OCV. One per-age point (cyc3200) collapses to a near-zero
-estimate at vanishing σ — a real-data conditioning quirk, visible in the figure and still refused.
+On Cell1 the estimate is **wrong in sign**: +1.9% → +10.5% capacity *gain* (shared OCV) while the
+cell loses 3.7% → 24.2%. The ±0.03% interval puts the +10.5% estimate roughly **1150σ** from the
+−24.2% truth — exquisitely precise and catastrophically wrong, the confident-wrongness this project
+is built against — and the differential lack-of-fit climbs 91 → 815 (its contract: hundreds when the
+observer cannot reproduce a change).
 
-This is the honest expectation, stated in advance and now measured: a real cell mismatches the ECM
-harder than PyBaMM did (§14), so AstraCell refuses capacity harder. What it establishes is exactly
-[LIMITATIONS §16b](../LIMITATIONS.md)'s narrow claim — that AstraCell *knows when it cannot trust the
-ECM on a real cell* — and nothing broader. It is one cell of eight; it is not validation of the ECM,
-and no fault was detected. **The refusal is the result.**
+v0.7 runs the same pipeline across all eight and asks whether that is a property of Cell1 or of the
+observer meeting a real cell. Two readings a breadth run is for:
+
+**The refusal distribution.** Across 8 cells × 13 ages × 2 OCV modes = **208 evaluations**, the
+verdict is **`REFUSE_MODEL_BIAS` every single time**: shared-OCV **104/104**, per-age-OCV **104/104**,
+**8/8 cells refuse every scored age**, and no other verdict kind (no WEAK, no DIAGNOSE) ever appears.
+Coverage of the measured fade is **0/104** in both modes, and the variance-only interval is a median
+**±0.03%** wide — so those are not near-misses; the estimate and the truth do not overlap.
+
+**The phantom-gain spread.** Every cell loses a fifth to a third of its capacity: measured EOL fade
+**−20.0% (Cell7) to −38.0% (Cell5)**, median −23.1%. The deployable shared-OCV estimate lands **−0.2%
+to +14.3%** (median +10.7%): **7 of 8 cells report an outright capacity *gain*** at end of life, wrong
+in sign against a real loss, and across all 104 shared-OCV ages **95%** of estimates read positive.
+The one exception is **Cell5**, the most-faded of the eight (−38.0%), whose shared estimate collapses
+to **≈0%** at a vanishing σ — still tens of points from its measured fade, still the highest
+lack-of-fit of any cell (1151), and still refused. Re-measuring the pseudo-OCV at every age (the
+per-age control) does **not** rescue the estimate — it makes it worse, **+13.3% to +18.9%** (all eight
+a gain) — because the dominant mismatch is the first-order *dynamics*, not the moving OCV.
+
+![all eight Oxford cells: every cell fades, the ECM reports a gain, AstraCell refuses every age](../reports/figures/real_cell_capacity.png)
+
+This is the honest expectation, stated in advance and now measured on eight cells rather than one: a
+real cell mismatches the first-order ECM harder than PyBaMM did (§14), so AstraCell refuses capacity
+harder — and it does so on *every* cell, which makes the phantom the observer's failure to represent
+a real cell, not a quirk of Cell1. What it establishes is exactly [LIMITATIONS §16b](../LIMITATIONS.md)'s
+narrow claim — that AstraCell *knows when it cannot trust the ECM on a real cell* — now across the
+whole dataset. It does **not** upgrade the tier: still one first-order ECM, still isothermal, still a
+shared baseline a different day, still **no fault detected** and no validation of the ECM. **The
+refusal is the result — eight cells over, not one.**
 
 ## A note on units: the run corrected the Readme
 

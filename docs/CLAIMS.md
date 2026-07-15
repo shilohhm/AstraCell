@@ -13,8 +13,8 @@ and the one most battery-diagnostic work blurs:
   electrochemical simulator that AstraCell did not implement, whose mismatch it did not
   design. Stronger than Tier 1; still synthetic.
 - **Tier 3 — physical battery validation.** A measured cell. **No validation** — v0.6 made
-  first *contact* (one real cell, on which the ECM refused; C19), which is not validation. See
-  the Tier 3 table, which states both the contact and the absence plainly.
+  first *contact* and v0.7 widened it to all eight cells (every one refused; C19), which is still
+  not validation. See the Tier 3 table, which states both the contact and the absence plainly.
 
 Schema: **Claim ID · Claim · Validation tier · Evidence · Reproduction command · Limitations**.
 `$PY` is the venv Python (see [REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
@@ -49,15 +49,15 @@ Schema: **Claim ID · Claim · Validation tier · Evidence · Reproduction comma
 ## Tier 3 — physical battery validation
 
 These rows state an absence plainly: AstraCell makes **no** Tier 3 *validation* claim. C19 records
-v0.6's first real-cell *contact* — on one measured cell the ECM is directionally wrong and AstraCell
-refuses — which is not validation, and does not become it by adding a single cell.
+the real-cell *contact* — on all eight measured cells the ECM is directionally wrong and AstraCell
+refuses — which is not validation, and does not become it by adding cells within one chemistry.
 
 | ID | Claim | Tier | Evidence | Reproduction | Limitations |
 |---|---|---|---|---|---|
-| C16 | **No physical battery validates AstraCell, and no real fault has ever been detected.** v0.6 made first *contact* — one real cell measured and scored (Oxford Cell1; C19), on which the ECM refused every age — but that is contact, not validation: one cell of eight, no fault detected, no diagnosis confirmed. No result is validated against anything but code, an electrochemical simulator, and one real cell the observer declined to trust | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1, §10, §14, §15, §16 | see C19 for the one real run; otherwise nothing — the *absence of validation* is the claim | This is the project's largest gap. Every Tier 1/2 result is conditional on models that have otherwise not touched a cell |
+| C16 | **No physical battery validates AstraCell, and no real fault has ever been detected.** v0.6 made first *contact* and v0.7 scored all eight real cells (Oxford Cell1–8; C19), on which the ECM refused every age — but that is contact, not validation: one chemistry, no fault detected, no diagnosis confirmed. No result is validated against anything but code, an electrochemical simulator, and eight real cells the observer declined to trust | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1, §10, §14, §15, §16 | see C19 for the real run; otherwise nothing — the *absence of validation* is the claim | This is the project's largest gap. Every Tier 1/2 result is conditional on models that have otherwise not touched a cell |
 | C17 | The OCV curves are **stand-ins** (`NMC_LIKE` from a Li-polymer fit; `LFP_LIKE` hand-built), so every SNR and CRLB is a statement about *this model*, not a battery | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1 | — | Replace `cell/ocv.py` with measured tables before quoting any figure outside this repository |
 | C18 | AstraCell claims **no** EV-level validation and **no** safety-critical deployment readiness | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §14 · [POSITIVE_CONTROL](POSITIVE_CONTROL.md) §5 | — | It is a research scaffold for the identifiability question, nothing more |
-| C19 | On **Oxford Cell1** (a real measured cell), the first-order ECM's capacity estimate is wrong in **sign** — a +1.9% → +10.5% "gain" against a measured −3.7% → **−24.2%** fade (≈1150σ from truth) — and AstraCell refuses it on **all 13 scored ages (REFUSE_MODEL_BIAS, coverage 0/13), in both OCV modes**. Abstention holds on a measured cell | 3 — contact (one cell, not validation) | `examples/08` · `plant/oxford.py` · `test_oxford.py` · `real_cell_capacity.png` · [REAL_CELL](REAL_CELL.md) | `$PY scripts/fetch_oxford.py` then `$PY examples/08_real_cell.py` *(needs the ODbL download + `.[oxford]` extra)* | One cell of eight, first-order ECM, isothermal, shared baseline a different day; **no fault detected and the ECM is not validated — the refusal *is* the result**. Numbers reproduce from the fetched data, which is never committed. [REAL_CELL](REAL_CELL.md), [LIMITATIONS](../LIMITATIONS.md) §16 |
+| C19 | On **all eight Oxford cells** (real measured cells), the first-order ECM's capacity estimate is wrong in **sign** — every cell fades **−20% to −38%** while the deployable shared-OCV estimate reads **−0.2% to +14.3%** (a phantom *gain* on 7 of 8; the ±0.03% (1σ) interval puts Cell1's +10.5% ≈1150σ from its −24.2% truth) — and AstraCell refuses **all 104 scored ages (REFUSE_MODEL_BIAS, coverage 0/104), in both OCV modes (208/208 evaluations)**. Abstention holds on every measured cell | 3 — contact (eight cells, not validation) | `examples/08` · `plant/oxford.py` · `test_oxford.py` · `real_cell_capacity.png` · [REAL_CELL](REAL_CELL.md) | `$PY scripts/fetch_oxford.py` then `$PY examples/08_real_cell.py` *(needs the ODbL download + `.[oxford]` extra)* | Eight cells but one chemistry, first-order ECM, isothermal, shared baseline a different day; **no fault detected and the ECM is not validated — the refusal *is* the result**. Numbers reproduce from the fetched data, which is never committed. [REAL_CELL](REAL_CELL.md), [LIMITATIONS](../LIMITATIONS.md) §16 |
 
 ---
 
