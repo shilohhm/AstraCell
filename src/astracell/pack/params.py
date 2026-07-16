@@ -56,6 +56,9 @@ class PackParams:
     coolant_temp_k: float = NOMINAL_COOLANT_TEMP_K
     coulombic_efficiency: float = 1.0
     ea_over_r_k: float = DEFAULT_EA_OVER_R_K
+    # Optional second RC branch (v0.8 "depth"). None on both = the first-order ECM.
+    r2_ohm: FloatArray | None = None
+    c2_farad: FloatArray | None = None
 
     def __post_init__(self) -> None:
         n = self.topology.n_cells
@@ -74,6 +77,20 @@ class PackParams:
                 raise ValueError(f"{field} must be strictly positive")
             object.__setattr__(self, field, arr)
 
+        # The second RC branch is optional but must be complete: both resistor and
+        # capacitor, or neither. Half a branch is a construction bug, not a first-order
+        # model, so refuse it rather than silently ignore the orphaned field.
+        if (self.r2_ohm is None) != (self.c2_farad is None):
+            raise ValueError("second RC branch needs both r2_ohm and c2_farad, or neither")
+        if self.r2_ohm is not None:
+            for field in ("r2_ohm", "c2_farad"):
+                arr = _frozen(getattr(self, field))
+                if arr.shape != (n,):
+                    raise ValueError(f"{field} has shape {arr.shape}, expected ({n},)")
+                if not np.all(arr > 0.0):
+                    raise ValueError(f"{field} must be strictly positive")
+                object.__setattr__(self, field, arr)
+
     @property
     def n_cells(self) -> int:
         return self.topology.n_cells
@@ -87,6 +104,8 @@ class PackParams:
             c1_farad=self.c1_farad,
             coulombic_efficiency=self.coulombic_efficiency,
             ea_over_r_k=self.ea_over_r_k,
+            r2_ohm=self.r2_ohm,
+            c2_farad=self.c2_farad,
         )
 
     @property

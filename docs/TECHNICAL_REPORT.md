@@ -20,7 +20,7 @@ one.
 |---|---|---|
 | **1 — internal self-consistency and synthetic experiments** | Demonstrated within AstraCell's own models, and by theorems about the estimator | Extensive: identifiability, calibration, model-bias accounting all measured |
 | **2 — independently developed external simulator** | Tested against PyBaMM — an electrochemical simulator AstraCell did not implement, whose mismatch it did not design | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.7 ran all eight real cells (Oxford Cell1–8) and the ECM refused every age; no validation, one chemistry. Stated, not hidden |
+| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.7 ran all eight real cells (Oxford Cell1–8) and the ECM refused every age; v0.8 showed that refusal is not a model-order artefact (a second-order observer changes 0/208 verdicts). No validation, one chemistry. Stated, not hidden |
 
 Everything in §4 is labelled by tier. Everything in §6 is why Tier 3 has no *validation* — eight cells of contact (§7.1) do not make one.
 
@@ -247,7 +247,10 @@ contact do not make one — and here is the full account of why. The complete le
   104 scored ages in both OCV modes (208/208; §7.1, [REAL_CELL.md](REAL_CELL.md)). That is contact,
   not validation: eight cells but one chemistry, no fault detected, the ECM confirmed nowhere. Every
   Tier 1/2 result remains conditional on models that have otherwise not touched a cell. This is still
-  the largest gap in the project.
+  the largest gap in the project. v0.8 confirmed the refusal is not a *first-order* artefact — a
+  *fixed* second-order observer changes 0/208 verdicts (largest estimate change 10⁻¹⁴), the RC branch
+  cancelling in the `R0`/capacity sensitivities — but did **not** test *fitting* the extra dynamics,
+  a 4→6-parameter problem that trades model bias for confounding, still open (v0.9).
 - **The OCV curves are stand-ins.** `NMC_LIKE` uses a Li-polymer fit; `LFP_LIKE` is
   hand-built. Every SNR and CRLB is a statement about *this model*. Replace `cell/ocv.py`
   with measured tables before quoting a figure elsewhere.
@@ -278,9 +281,12 @@ Only for the faults this machinery says are worth chasing and can be trusted:
    each cell's own measured fade across the whole dataset — where the first-order ECM came back
    directionally wrong on every cell and AstraCell refused every age (REFUSE_MODEL_BIAS 104/104 in
    both OCV modes; [REAL_CELL.md](REAL_CELL.md), [LIMITATIONS §16](../LIMITATIONS.md)). That is
-   contact, not validation. The next step is a same-day baseline, other chemistries and formats, and
-   an observer that can express real OCV drift — to learn whether the refusal ever becomes a
-   trustworthy diagnosis.
+   contact, not validation. v0.8 then asked whether that refusal is a *model-order* artefact and found
+   it is not — a *fixed* second-order observer changes no verdict (0/208, largest estimate change
+   10⁻¹⁴). So the honest next step for the observer is to *fit* the added dynamics
+   (`R0,Q,R1,C1 → +R2,C2`, v0.9) — a 4→6-parameter identifiability problem that trades model bias for
+   confounding — alongside a same-day baseline, other chemistries and formats, and an observer that
+   can express real OCV drift, to learn whether the refusal ever becomes a trustworthy diagnosis.
 2. **DFN with degradation submodels**, and **injected capacity fade** — which requires
    giving up the shared-OCV control that currently isolates dynamic mismatch, so it is a
    larger change than it looks.

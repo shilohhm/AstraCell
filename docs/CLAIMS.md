@@ -12,9 +12,10 @@ and the one most battery-diagnostic work blurs:
 - **Tier 2 — independently developed external simulator.** Tested against PyBaMM, an
   electrochemical simulator that AstraCell did not implement, whose mismatch it did not
   design. Stronger than Tier 1; still synthetic.
-- **Tier 3 — physical battery validation.** A measured cell. **No validation** — v0.6 made
-  first *contact* and v0.7 widened it to all eight cells (every one refused; C19), which is still
-  not validation. See the Tier 3 table, which states both the contact and the absence plainly.
+- **Tier 3 — physical battery validation.** A measured cell. **No validation** — v0.6 made first
+  *contact*, v0.7 widened it to all eight cells (every one refused; C19), and v0.8 showed the refusal
+  survives a second-order observer (C20). Still not validation. See the Tier 3 table, which states
+  both the contact and the absence plainly.
 
 Schema: **Claim ID · Claim · Validation tier · Evidence · Reproduction command · Limitations**.
 `$PY` is the venv Python (see [REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
@@ -50,7 +51,9 @@ Schema: **Claim ID · Claim · Validation tier · Evidence · Reproduction comma
 
 These rows state an absence plainly: AstraCell makes **no** Tier 3 *validation* claim. C19 records
 the real-cell *contact* — on all eight measured cells the ECM is directionally wrong and AstraCell
-refuses — which is not validation, and does not become it by adding cells within one chemistry.
+refuses — which is not validation, and does not become it by adding cells within one chemistry. C20
+adds that this refusal is not a first-order artefact — a *fixed* second-order observer changes no
+verdict — but that too is a property of the estimator, not a validation of the ECM.
 
 | ID | Claim | Tier | Evidence | Reproduction | Limitations |
 |---|---|---|---|---|---|
@@ -58,6 +61,7 @@ refuses — which is not validation, and does not become it by adding cells with
 | C17 | The OCV curves are **stand-ins** (`NMC_LIKE` from a Li-polymer fit; `LFP_LIKE` hand-built), so every SNR and CRLB is a statement about *this model*, not a battery | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §1 | — | Replace `cell/ocv.py` with measured tables before quoting any figure outside this repository |
 | C18 | AstraCell claims **no** EV-level validation and **no** safety-critical deployment readiness | 3 — none | [LIMITATIONS](../LIMITATIONS.md) §14 · [POSITIVE_CONTROL](POSITIVE_CONTROL.md) §5 | — | It is a research scaffold for the identifiability question, nothing more |
 | C19 | On **all eight Oxford cells** (real measured cells), the first-order ECM's capacity estimate is wrong in **sign** — every cell fades **−20% to −38%** while the deployable shared-OCV estimate reads **−0.2% to +14.3%** (a phantom *gain* on 7 of 8; the ±0.03% (1σ) interval puts Cell1's +10.5% ≈1150σ from its −24.2% truth) — and AstraCell refuses **all 104 scored ages (REFUSE_MODEL_BIAS, coverage 0/104), in both OCV modes (208/208 evaluations)**. Abstention holds on every measured cell | 3 — contact (eight cells, not validation) | `examples/08` · `plant/oxford.py` · `test_oxford.py` · `real_cell_capacity.png` · [REAL_CELL](REAL_CELL.md) | `$PY scripts/fetch_oxford.py` then `$PY examples/08_real_cell.py` *(needs the ODbL download + `.[oxford]` extra)* | Eight cells but one chemistry, first-order ECM, isothermal, shared baseline a different day; **no fault detected and the ECM is not validated — the refusal *is* the result**. Numbers reproduce from the fetched data, which is never committed. [REAL_CELL](REAL_CELL.md), [LIMITATIONS](../LIMITATIONS.md) §16 |
+| C20 | The refusal is **not a first-order artefact.** Rerunning the identical eight-cell loop with a *second-order* observer — a second RC branch (fixed τ₂ ≈ 240 s), still fitting only `R0` and capacity — changes **0 of 208** verdicts; `REFUSE_MODEL_BIAS` stays 104/104 in both OCV modes and the largest first-vs-second-order gap over all 208 evaluations is **1.7×10⁻¹⁴** (lack-of-fit 2.8×10⁻¹¹), i.e. round-off. A *fixed* richer model is invisible to a fit over `(R0, capacity)`: the RC overpotentials cancel in `∂V/∂R0` and `∂V/∂Q` | 1 — internal invariance (measured on the Tier-3 run) | `examples/08` depth table · `test_second_order.py` · [REAL_CELL](REAL_CELL.md) · [LIMITATIONS §16e](../LIMITATIONS.md) | `$PY examples/08_real_cell.py` *(dataset)*; mechanism: `$PY -m pytest tests/test_second_order.py` | **Retraction:** the pre-run guess that depth would shrink the misfit is falsified. Only a *fixed* branch is tested; model order enters the verdict only by *fitting* the dynamics (`→ +R2,C2`), a 4→6-parameter problem trading bias for confounding — v0.9, not asserted here |
 
 ---
 

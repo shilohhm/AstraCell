@@ -693,5 +693,26 @@ lack-of-fit in the hundreds (636–1151 at end of life across the eight), not th
 change. And the per-age-OCV control against the shared-OCV headline (both in `examples/08`) does its
 job of catching a stuck "refuses always" gate: the two modes *disagree* in magnitude (e.g. +10.5% vs
 +17.1% at Cell1's end of life), so the machinery is discriminating, not frozen. What it discriminates
-toward
-is still refusal — correctly, on a cell it cannot model — but it is refusal with its eyes open.
+toward is still refusal — correctly, on a cell it cannot model — but it is refusal with its eyes open.
+
+### 16e. The refusal is not a first-order artefact — depth was measured, not assumed (v0.8)
+
+A fair objection to §16a: the observer is a *first-order* ECM, so perhaps the phantom is only the one
+missing timescale, and a second RC branch would dissolve it. v0.8 tested that directly. It reran the
+identical eight-cell loop with a **second-order** observer — a second RC branch, fixed timescale
+τ₂ ≈ 240 s, still fitting only `R0` and capacity — across all 208 evaluations. Nothing moved: **0/208
+verdicts changed**, `REFUSE_MODEL_BIAS` held at 104/104 in both OCV modes, and the largest gap between
+the first- and second-order estimate over all 208 evaluations was **1.7×10⁻¹⁴** (lack-of-fit
+2.8×10⁻¹¹) — floating-point round-off.
+
+This is a **retraction as much as a result.** The v0.8 hypothesis, stated before the run, was that a
+second timescale would shrink the misfit. It was falsified: depth changes the capacity verdict by
+nothing. The reason is structural — voltage's sensitivity to `R0` and to capacity does not contain the
+RC overpotentials (they cancel in `∂V/∂R0` and `∂V/∂Q`), so a *fixed* richer forward model is
+invisible to a fit over `(R0, capacity)`. Model order can enter the capacity verdict only by *fitting*
+the added dynamics (`R0,Q,R1,C1 → +R2,C2`): a 4→6-parameter identifiability problem that trades the
+model bias the gate now catches for fresh confounding — v0.9's problem, and this section asserts
+nothing about its outcome. What §16e settles is narrow and worth stating plainly: the refusal in §16a
+is a property of a real cell exceeding the ECM, **not** of the ECM's model order. `examples/08` prints
+the depth table; `tests/test_second_order.py` pins the branch physics; see
+[docs/REAL_CELL.md](docs/REAL_CELL.md) and CLAIMS C20.

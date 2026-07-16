@@ -54,7 +54,16 @@ FloatArray = NDArray[np.float64]
 # overclaim and the refusal, never the magnitude of the phantom fault.
 DEFAULT_OBSERVER_R0_OHM: float = 0.025
 DEFAULT_OBSERVER_R1_OHM: float = 0.010
-DEFAULT_OBSERVER_C1_FARAD: float = 3000.0
+DEFAULT_OBSERVER_C1_FARAD: float = 3000.0  # tau1 = R1*C1 = 30 s (the one first-order timescale)
+
+# The optional second RC branch (v0.8 "depth"). tau2 = R2*C2 = 240 s -- a *slow* branch,
+# on the electrolyte-diffusion timescale, added on top of the unchanged 30 s branch. These are
+# representative, physically-motivated values, NOT fitted: the honest v0.8 question is whether a
+# second timescale the observer was *not* tuned against changes the verdict, and tuning R2/C2 to
+# shrink the phantom would be the exact over-optimism this project refuses. Their sensitivity is
+# reported alongside the result, mirroring the first branch's -94%..+5% tuning note above.
+DEFAULT_OBSERVER_R2_OHM: float = 0.008
+DEFAULT_OBSERVER_C2_FARAD: float = 30000.0
 
 _VOLTAGE_ONLY = SensorTopology(n_cells=1, voltage_cells=(0,), temp_cells=())
 
@@ -96,12 +105,20 @@ def build_external_observer(
     r0_ohm: float = DEFAULT_OBSERVER_R0_OHM,
     r1_ohm: float = DEFAULT_OBSERVER_R1_OHM,
     c1_farad: float = DEFAULT_OBSERVER_C1_FARAD,
+    r2_ohm: float | None = None,
+    c2_farad: float | None = None,
 ) -> PackParams:
     """A one-cell ECM observer with the plant's OCV and ``ea_over_r_k=0`` (isothermal voltage).
 
     Setting ``ea_over_r_k=0`` makes terminal voltage independent of the observer's own thermal
     state, matching PyBaMM's default isothermal cell and removing temperature as a confounder --
     which is also why ``hA`` is not among the fitted specs: it has no path to the voltage.
+
+    Pass ``r2_ohm`` / ``c2_farad`` (or use :func:`build_second_order_observer`) to add the optional
+    second RC branch. The fitted specs are unchanged either way -- ``(R0, capacity)`` -- so the
+    second branch is *fixed forward structure*, not a fitted parameter: it changes what dynamics
+    the observer can express, not what it estimates. That isolates "does a second timescale reduce
+    the phantom?" from "does fitting a second branch introduce a confounder?".
     """
     one = lambda value: np.array([value], dtype=float)  # noqa: E731
     return PackParams(
@@ -114,7 +131,27 @@ def build_external_observer(
         heat_capacity_j_per_k=one(900.0),
         ha_w_per_k=one(2.5),
         ea_over_r_k=0.0,
+        r2_ohm=None if r2_ohm is None else one(r2_ohm),
+        c2_farad=None if c2_farad is None else one(c2_farad),
     )
+
+
+def build_second_order_observer(
+    curve: OcvCurve,
+    capacity_ah: float,
+    *,
+    r2_ohm: float = DEFAULT_OBSERVER_R2_OHM,
+    c2_farad: float = DEFAULT_OBSERVER_C2_FARAD,
+    **kwargs: float,
+) -> PackParams:
+    """The same observer with a second, slower RC branch (``tau2 ~ 240 s``) added.
+
+    Identical to :func:`build_external_observer` in every other respect -- same R0, same fast
+    branch, same OCV, same fitted ``(R0, capacity)`` -- so a first- vs second-order comparison
+    isolates the effect of *adding a slow timescale* and nothing else. The branch values are
+    representative and fixed in advance, never tuned to the data (see the module constants).
+    """
+    return build_external_observer(curve, capacity_ah, r2_ohm=r2_ohm, c2_farad=c2_farad, **kwargs)
 
 
 def external_specs() -> tuple[ParameterSpec, ...]:

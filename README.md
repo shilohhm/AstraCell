@@ -59,7 +59,7 @@ claim at a higher one.
 |---|---|---|
 | **1 — internal self-consistency and synthetic experiments** | Within AstraCell's own models, plus theorems about the estimator | Extensive |
 | **2 — independently developed external simulator** | Against PyBaMM, a simulator AstraCell did not implement | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault | **Contact, not validation.** v0.7 ran all eight cells: the ECM is directionally wrong on every one and AstraCell refuses all 208 evaluations ([REAL_CELL](docs/REAL_CELL.md)) — eight cells, not validation |
+| **3 — physical battery validation** | A measured cell, a real fault | **Contact, not validation.** v0.7 ran all eight cells: the ECM is directionally wrong on every one and AstraCell refuses all 208 evaluations; v0.8 confirmed the refusal survives a second-order observer (0/208 verdicts change) ([REAL_CELL](docs/REAL_CELL.md)) — eight cells, not validation |
 
 ## What the evidence shows
 
@@ -141,7 +141,7 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/07_external_positive_control.py` | and when that cell is really broken, does it notice? |
 | `pip install -e ".[oxford]"` · `python scripts/fetch_oxford.py` | add the Oxford real-cell dataset (ODC-ODbL, ~254 MB licensed download) |
 | `python examples/08_real_cell.py` | Tier 3: score the observer against a real cell's measured fade (skips without the data) |
-| `python -m pytest` | 237 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
+| `python -m pytest` | 246 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
 | `python -m ruff check src tests examples scripts` · `python -m mypy` | lint · type-check |
 
 `make check` runs lint + typecheck + test; `make help` lists every target. The full
@@ -212,8 +212,11 @@ and can be trusted. **v0.6 took the measured-cell step** every prior version poi
 widened it to all eight cells** of the Oxford Battery Degradation Dataset: every cell fades 20–38%,
 the first-order ECM's capacity estimate comes back wrong in sign — a phantom *gain* on seven of eight
 (+10.5% against Cell1's −24.2% loss) — and AstraCell refuses all 104 scored ages in both OCV modes
-(208/208 evaluations). Worse than any synthetic tier, and the honest outcome: the refusal is the
-result, now eight cells over. It is contact, not validation — eight cells, one chemistry. See
+(208/208 evaluations). **v0.8** reran the identical loop with a *second-order* observer: the verdict
+did not move — 0/208 changed, largest change 10⁻¹⁴ — so the refusal is not a model-order artefact
+(model order enters the verdict only by *fitting* the dynamics, which is v0.9). Worse than any
+synthetic tier, and the honest outcome: the refusal is the result, now eight cells over. It is
+contact, not validation — eight cells, one chemistry. See
 [REAL_CELL.md](docs/REAL_CELL.md), the [technical report](docs/TECHNICAL_REPORT.md) §7, and
 [LIMITATIONS.md](LIMITATIONS.md) §16.
 

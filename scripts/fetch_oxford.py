@@ -130,7 +130,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--url", default=DATASET_URL, help="override the download URL")
     parser.add_argument(
-        "--from", dest="local", type=Path, default=None,
+        "--from",
+        dest="local",
+        type=Path,
+        default=None,
         help="copy from a file you downloaded by hand instead of fetching over the network",
     )
     parser.add_argument(

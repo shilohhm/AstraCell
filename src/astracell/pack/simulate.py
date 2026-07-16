@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from astracell.cell.ecm import r0_at_temperature, rc_step, soc_step
+from astracell.cell.ecm import r0_at_temperature, rc2_step, rc_step, soc_step
 from astracell.cell.thermal import heat_generation, thermal_derivative
 from astracell.pack.params import PackParams
 
@@ -105,6 +105,10 @@ def simulate(
 
     soc = _initial_state(soc0, n, "soc0")
     v_rc = np.zeros(n)
+    # Second RC branch: stays identically zero when absent, so the first-order path
+    # (subtract 0.0, add 0.0) is bit-for-bit unchanged.
+    v_rc2 = np.zeros(n)
+    second_order = elec.is_second_order
     temp = _initial_state(params.coolant_temp_k if temp0_k is None else temp0_k, n, "temp0_k")
 
     soc_out = np.empty((n_time, n))
@@ -114,7 +118,7 @@ def simulate(
     for k in range(n_time):
         i_k = float(current[k])
         r0 = r0_at_temperature(elec.r0_ohm, temp, elec.ea_over_r_k)
-        volt = curve.ocv(soc, temp) - i_k * r0 - v_rc
+        volt = curve.ocv(soc, temp) - i_k * r0 - v_rc - v_rc2
 
         # Record the state *at* sample k, before stepping to k+1.
         soc_out[k] = soc
@@ -124,11 +128,15 @@ def simulate(
         if k == n_time - 1:
             break
 
-        heat = heat_generation(i_k, r0, v_rc, temp, curve.docv_dtemp(soc))
+        # Total RC overpotential drives the polarisation heat, so I*(OCV-V) == I^2*R0
+        # + I*(v1+v2) stays exact at any model order (test_physics_invariants).
+        heat = heat_generation(i_k, r0, v_rc + v_rc2, temp, curve.docv_dtemp(soc))
         dtemp = thermal_derivative(temp, heat, lap, therm)
 
         soc = soc_step(soc, i_k, dt_s, elec)
         v_rc = rc_step(v_rc, i_k, dt_s, elec)
+        if second_order:
+            v_rc2 = rc2_step(v_rc2, i_k, dt_s, elec)
         temp = temp + dt_s * dtemp
 
     if check_bounds:

@@ -19,6 +19,16 @@ breadth run is for:
 * **the phantom-gain spread** -- how far, and in which direction, the ECM's capacity estimate lands
   relative to each cell's measured fade, and how much that varies cell to cell.
 
+**What v0.8 adds: depth.** v0.7 widened the run to eight cells (breadth) at one model order. v0.8
+reruns the identical loop with a *second-order* observer -- a second RC branch on the first-order
+ECM -- and asks whether the phantom and refusal are a property of the model *order* or of the
+observer meeting a real cell. The branch is fixed forward structure (still fitting only ``R0`` and
+capacity), its timescale fixed in advance, never tuned to shrink the phantom. The measured result
+(the depth section this script prints) corrects a pre-run guess: a *fixed* second branch moves the
+capacity estimate and lack-of-fit by round-off (<=3e-11) -- nothing -- because voltage's
+sensitivity to R0 and capacity does not contain the RC branches. Model order enters the verdict
+only by *fitting* the dynamics, which is v0.9's problem, not asserted here.
+
 Two observers are run against each aged cell, exactly as in v0.6:
 
 * **shared-OCV (the deployable one).** Calibrate the pseudo-OCV once on the fresh cell and track. A
@@ -31,10 +41,13 @@ Two observers are run against each aged cell, exactly as in v0.6:
 **The honest expectation, stated before the run.** Continuing the v0.3 -> v0.4 arc, a real cell
 should mismatch the ECM at least as badly as PyBaMM did, so the likely outcome is that AstraCell
 *refuses capacity on every cell*, and that the phantom persists across the eight -- making it the
-observer's failure to represent a real cell, not a quirk of Cell1. That is not a failure of the
-diagnostic. A screen that abstains on data it cannot trust is the entire thesis. Whatever prints
-below is the measured outcome of this run -- no real-cell number is hard-coded anywhere in this
-repository. See docs/REAL_CELL.md.
+observer's failure to represent a real cell, not a quirk of Cell1. v0.8's depth pass shared that
+prior, and the run sharpened it: a *fixed* second branch does not even improve the dynamic fit -- it
+is invisible to the (R0, capacity) fit -- so it cannot clear the refusal. The narrower guess that a
+second timescale would shrink the misfit is retracted here, measured wrong. That is not a failure of
+the diagnostic. A screen that abstains on data it cannot trust is the entire thesis. Whatever prints
+below is the measured outcome of this run -- no real-cell number is hard-coded here. See
+docs/REAL_CELL.md.
 
 The data is ODC-ODbL and is never committed here; ``scripts/fetch_oxford.py`` fetches it, and this
 script skips cleanly when it is absent -- exactly as examples 06-07 skip without PyBaMM.
@@ -43,6 +56,7 @@ script skips cleanly when it is absent -- exactly as examples 06-07 skip without
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -57,6 +71,7 @@ from astracell.calibration import (
     CAPACITY_TARGET,
     build_evidence,
     build_external_observer,
+    build_second_order_observer,
     detection_metrics,
     external_scenario,
     run_trials,
@@ -77,6 +92,12 @@ CELLS = tuple(f"Cell{i}" for i in range(1, 9))
 SEED = 0
 N_TRIALS = 400
 N_SCORE = 14  # each cell has 46-78 characterisation ages; score a readable spread across its life
+
+#: An observer is built from an OCV curve and a baseline capacity. v0.8 runs the loop twice: the
+#: first-order ECM (``build_external_observer``) and the second-order one (an added slow RC branch,
+#: ``build_second_order_observer``). The loop, the windows, the trials -- everything else is shared,
+#: which lets the first- vs second-order comparison attribute any change to the model order.
+ObserverFactory = Callable[[object, float], object]
 
 #: Keep the replay inside the ECM's representable SOC band even for the most-faded age, and inside
 #: the shortest discharge. ``aligned_pair`` starts the observer at SOC 0.98 (the ECM's ceiling), so
@@ -248,16 +269,17 @@ def _run_mode(
     window_s: float,
     *,
     per_age_ocv: bool,
+    observer_factory: ObserverFactory,
 ) -> tuple[AgeRow, ...]:
     """Evaluate the selected aged cells under one OCV policy: shared baseline OCV, or each age's."""
-    shared_observer = build_external_observer(pseudo_ocv_curve(baseline), baseline.capacity_ah)
+    shared_observer = observer_factory(pseudo_ocv_curve(baseline), baseline.capacity_ah)
     rows = []
     for cyc in selection:
         if cyc == baseline.cyc:
             continue
         aged = ages[cyc]
         observer = (
-            build_external_observer(pseudo_ocv_curve(aged), baseline.capacity_ah)
+            observer_factory(pseudo_ocv_curve(aged), baseline.capacity_ah)
             if per_age_ocv
             else shared_observer
         )
@@ -265,19 +287,45 @@ def _run_mode(
     return tuple(rows)
 
 
-def _score_cell(cell: str, ages: dict[int, OxfordAge]) -> CellResult:
+def _score_cell(
+    cell: str,
+    ages: dict[int, OxfordAge],
+    *,
+    observer_factory: ObserverFactory = build_external_observer,
+) -> CellResult:
     """Score one cell end to end under both OCV policies, or record why it could not be scored."""
     n_loaded = len(ages)
     usable = _usable_ages(ages)
     n_dropped = n_loaded - len(usable)
+    if not usable:
+        # No usable discharge means no definable baseline, so compute one BEFORE the try below would
+        # index an empty dict. Report the miss rather than crash the whole eight-cell run.
+        print(f"  [!] {cell}: no usable ~1C discharge; reported as skipped, not silently dropped")
+        return CellResult(cell, n_loaded, n_dropped, 0, 0.0, 0, 0.0, (), (), error="no usable ages")
     baseline = usable[min(usable)]
     try:
         if len(usable) < 2:
             raise ValueError(f"only {len(usable)} usable ages; need >= 2 to score a fade")
         selection = _score_selection(usable)
         window_s = _safe_window({c: usable[c] for c in selection})
-        shared = _run_mode(cell, usable, baseline, selection, window_s, per_age_ocv=False)
-        per_age = _run_mode(cell, usable, baseline, selection, window_s, per_age_ocv=True)
+        shared = _run_mode(
+            cell,
+            usable,
+            baseline,
+            selection,
+            window_s,
+            per_age_ocv=False,
+            observer_factory=observer_factory,
+        )
+        per_age = _run_mode(
+            cell,
+            usable,
+            baseline,
+            selection,
+            window_s,
+            per_age_ocv=True,
+            observer_factory=observer_factory,
+        )
     except (
         Exception
     ) as exc:  # a short/malformed discharge trips the window bounds: report, do not abort
@@ -462,10 +510,11 @@ def _summary(results: list[CellResult]) -> None:
     print("  observer                 first-order Thevenin ECM (R0, R1C1), measured pseudo-OCV")
     print(f"  ages scored              {total}, each against its own measured 1C fade")
     print()
+    n_gain = int((shared > 0).sum())
     print(f"  measured EOL fade        {fade.min():+.1%} to {fade.max():+.1%} -- every cell fades")
     print(
-        f"  shared-OCV EOL estimate  {shared.min():+.1%} to {shared.max():+.1%} -- a phantom gain, "
-        "wrong in sign"
+        f"  shared-OCV EOL estimate  {shared.min():+.1%} to {shared.max():+.1%} -- "
+        f"{n_gain}/{len(scored)} a phantom gain, wrong in sign"
     )
     print(
         f"  capacity refused         shared {ref_shared}/{total}, per-age {ref_per_age}/{total} "
@@ -489,11 +538,76 @@ def _summary(results: list[CellResult]) -> None:
     print("  eight cells over. Read against docs/REAL_CELL.md and LIMITATIONS.md section 16.")
 
 
+# ----------------------------------------------------------------------------- depth (v0.8)
+
+
+def _print_depth_comparison(first: list[CellResult], second: list[CellResult]) -> None:
+    """v0.8: rerun the identical loop with a 2nd-order observer and measure what depth changes.
+
+    The measured answer is: essentially nothing -- and the reason is structural, not incidental.
+    Voltage's sensitivity to R0 and to capacity does not contain the RC branches (their
+    overpotentials cancel in dV/dR0 and dV/dQ), so a *fixed* second branch is invisible to a fit
+    over (R0, capacity). This corrects the pre-run expectation that a second timescale would shrink
+    the misfit: it does not shrink it at all. Every number below is computed from THIS run.
+    """
+    rule("Depth (v0.8): a second RC branch is invisible to the capacity fit -- measured")
+    pairs = [(f, s) for f, s in zip(first, second, strict=True) if not f.error and not s.error]
+    if not pairs:
+        print("  no cell scored under both observers; nothing to compare")
+        return
+
+    print(
+        f"  {'cell':6s} {'meas EOL':>9s} {'1st est':>9s} {'2nd est':>9s} "
+        f"{'1st LoF':>9s} {'2nd LoF':>9s}  verdict (1st -> 2nd)"
+    )
+    for f, s in pairs:
+        fe, se = f.eol_shared, s.eol_shared
+        v1, v2 = fe.verdict.value.upper(), se.verdict.value.upper()
+        change = "same" if v1 == v2 else f"{v1} -> {v2}"
+        print(
+            f"  {f.cell:6s} {fe.fade:9.2%} {fe.estimate:9.2%} {se.estimate:9.2%} "
+            f"{f.worst_misfit:9.1f} {s.worst_misfit:9.1f}  {change}"
+        )
+
+    changed = evaluations = 0
+    max_dest = max_dlof = 0.0
+    for f, s in pairs:
+        for fr, sr in zip(f.shared + f.per_age, s.shared + s.per_age, strict=True):
+            evaluations += 1
+            changed += int(fr.verdict != sr.verdict)
+            max_dest = max(max_dest, abs(fr.estimate - sr.estimate))
+            max_dlof = max(max_dlof, abs(fr.misfit - sr.misfit))
+    ref2_shared = sum(s.refused_shared for _, s in pairs)
+    ref2_per_age = sum(s.refused_per_age for _, s in pairs)
+    n_shared = sum(s.n_scored for _, s in pairs)
+
+    print()
+    print(f"  verdicts changed by depth   {changed}/{evaluations} evaluations (both OCV modes)")
+    print(
+        f"  2nd-order refusals          shared {ref2_shared}/{n_shared}, "
+        f"per-age {ref2_per_age}/{n_shared}"
+    )
+    print(f"  largest |1st - 2nd| est     {max_dest:.1e}  over all {evaluations} evaluations")
+    print(f"  largest |1st - 2nd| LoF     {max_dlof:.1e}  over all {evaluations} evaluations")
+    print()
+    print("  The 2nd-order estimate and lack-of-fit equal the first-order's to round-off (the")
+    print("  maxima above) -- floating point, not dynamics. Depth is not failing to help here;")
+    print("  it is INVISIBLE to this fit: voltage's sensitivity to R0 and capacity does not")
+    print("  contain the RC branches, so a fixed richer forward model cannot move the estimate")
+    print("  the gate refuses. The refusal is NOT a first-order artefact -- a second timescale")
+    print("  the observer does not FIT changes nothing. Model order enters the capacity verdict")
+    print("  only by FITTING the dynamics (R0,Q,R1,C1 -> +R2,C2): a 4->6-parameter")
+    print("  identifiability problem that trades model bias for confounding -- the honest next")
+    print("  step (v0.9), not asserted here.")
+
+
 # --------------------------------------------------------------------------------------- figure
 
 
-def _figure(results: list[CellResult]) -> None:
-    scored = [r for r in results if not r.error]
+def _figure(first: list[CellResult], second: list[CellResult]) -> None:
+    pairs = [(f, s) for f, s in zip(first, second, strict=True) if not f.error and not s.error]
+    scored = [f for f, _ in pairs]
+    scored2 = [s for _, s in pairs]
     fig, (top, bot) = plt.subplots(2, 1, figsize=(9.4, 8.4), height_ratios=[1.35, 1])
 
     # Top: every cell's two trajectories. All measured-fade lines share one dark colour and all
@@ -577,7 +691,16 @@ def _figure(results: list[CellResult]) -> None:
         marker="s",
         s=42,
         zorder=3,
-        label="ECM estimate, shared OCV",
+        label="ECM estimate, shared OCV (1st-order)",
+    )
+    bot.scatter(
+        idx,
+        [100.0 * r.eol_shared.estimate for r in scored2],
+        color="#6a1b9a",
+        marker="D",
+        s=30,
+        zorder=4,
+        label="ECM estimate, shared OCV (2nd-order)",
     )
     bot.scatter(
         idx,
@@ -586,13 +709,13 @@ def _figure(results: list[CellResult]) -> None:
         marker="^",
         s=42,
         zorder=3,
-        label="ECM estimate, per-age OCV",
+        label="ECM estimate, per-age OCV (1st-order)",
     )
     bot.axhline(0.0, color="#455a64", lw=0.8, ls=":")
     bot.set(
         xticks=idx,
         ylabel="capacity deviation at end of life [%]",
-        title="End of life, per cell: the measured loss versus the ECM's phantom estimate",
+        title="End of life, per cell: measured loss vs the ECM's phantom (1st- and 2nd-order)",
     )
     bot.set_xticklabels([r.cell for r in scored], fontsize=8)
     bot.legend(fontsize=8, loc="center right")
@@ -623,20 +746,25 @@ def main() -> int:
         return 0
 
     print(
-        f"Scoring {len(CELLS)} Oxford cells against their own measured fade "
-        f"({N_TRIALS} trials/age, SEED={SEED}). This runs the observer, not a battery."
+        f"Scoring {len(CELLS)} Oxford cells vs their measured fade, first- AND second-order "
+        f"observers ({N_TRIALS} trials/age, SEED={SEED}). This runs the observer, not a battery."
     )
-    results = [_score_cell(cell, ages_by_cell[cell]) for cell in CELLS]
-    if not any(not r.error for r in results):
+    first = [_score_cell(cell, ages_by_cell[cell]) for cell in CELLS]
+    second = [
+        _score_cell(cell, ages_by_cell[cell], observer_factory=build_second_order_observer)
+        for cell in CELLS
+    ]
+    if not any(not r.error for r in first):
         print("No cell could be scored; aborting.")
         return 0
 
-    _print_roster(results, path.name)
-    _print_per_cell(results)
-    _print_refusal_distribution(results)
-    _print_phantom_gain_spread(results)
-    _figure(results)
-    _summary(results)
+    _print_roster(first, path.name)
+    _print_per_cell(first)
+    _print_refusal_distribution(first)
+    _print_phantom_gain_spread(first)
+    _summary(first)
+    _print_depth_comparison(first, second)
+    _figure(first, second)
     print(f"\nFigure written to {FIGURES / 'real_cell_capacity.png'}")
     return 0
 
