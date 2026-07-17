@@ -60,9 +60,9 @@ Throughout this document `PY` means `.venv/Scripts/python` (Windows) or
 | command | expected result |
 |---|---|
 | `$PY -m ruff check src tests examples scripts` | `All checks passed!` |
-| `$PY -m mypy` | `Success: no issues found in 42 source files` |
-| `$PY -m pytest` | `253 passed, 1 skipped` (~100 s, PyBaMM installed; the skip is the real-cell test, which needs the Oxford dataset — with it present, `254 passed`) |
-| `$PY -m pytest -m "not pybamm and not oxford"` | `237 passed, 17 deselected` (the base-install guarantee — no optional deps, no dataset) |
+| `$PY -m mypy` | `Success: no issues found in 43 source files` |
+| `$PY -m pytest` | `255 passed, 1 skipped` (~100 s, PyBaMM installed; the skip is the real-cell test, which needs the Oxford dataset — with it present, `256 passed`) |
+| `$PY -m pytest -m "not pybamm and not oxford"` | `239 passed, 17 deselected` (the base-install guarantee — no optional deps, no dataset) |
 | `$PY -m pytest -m pybamm` | `14 passed` (needs PyBaMM) |
 | `make check` | runs ruff + mypy + pytest together |
 
@@ -82,7 +82,7 @@ Run all eight to regenerate the full set (06–07 require PyBaMM; 08 needs the O
 |---|---|---|
 | `$PY examples/01_first_demo.py` | the whole thesis: pack map, refusal, counterfactuals | `packmap_*`, `detectability_*`, `min_detectable_*`, `sensor_placement_before_after` |
 | `$PY examples/02_noise_robustness.py` | current-nuisance and AR(1) tables | `noise_robustness` |
-| `$PY examples/03_next_best_test.py` | D- vs Ds-optimal planning, cheapest crossing | `next_best_test` |
+| `$PY examples/03_next_best_test.py` | D- vs Ds-optimal planning, cheapest crossing, and (act 6) the excitation that earns v0.9's `R1,C1` | `next_best_test` |
 | `$PY examples/04_model_mismatch.py` | structural bias, ceiling, excitation routing | `model_mismatch`, `structural_residual` |
 | `$PY examples/05_calibrated_abstention.py` | coverage, overclaim, more-data-worse | `calibration_*` |
 | `$PY examples/06_external_plant_gate.py` | PyBaMM phantom fault, coverage collapse | `external_*` |
@@ -119,9 +119,9 @@ the sequence and the pass condition.
 
 ```
  0. git status --porcelain                     # empty: start clean
- 1. make check                                 # ruff + mypy + pytest (253 passed, 1 skipped)
+ 1. make check                                 # ruff + mypy + pytest (255 passed, 1 skipped)
  2. examples 01-08 each exit 0                  # 01-07 regenerate 25 figures; 08 skips without the dataset
- 3. $PY -m pytest -m "not pybamm and not oxford" # 237 passed, 17 deselected: the base-install guarantee
+ 3. $PY -m pytest -m "not pybamm and not oxford" # 239 passed, 17 deselected: the base-install guarantee
     (stronger form: move site-packages/pybamm aside, then `pytest` still exits 0 — the optional tests skip)
  4. make notebook && make notebook-run          # strip then restore notebook outputs
     $PY -m pytest tests/test_notebooks.py       # committed notebooks retain outputs, last run error-free
@@ -156,7 +156,7 @@ change it here too.
 | matched-model coverage tracks nominal; mismatch variance-only coverage **0%**; harmful overclaim on capacity **100% → 0%** | report | `examples/05_calibrated_abstention.py` |
 | PyBaMM healthy cell: residual **20.65 mV**, phantom capacity **−67.6% ± 0.145%** (466σ); ECM control deviates ≤ **0.011** from nominal | report | `examples/06_external_plant_gate.py` |
 | paired estimator recovers an injected fault at **+20.0000%**; confounder refused, capacity at **1.98σ** vs a 2.00σ line; lack-of-fit screen captures **31%** of known bias; true-positive rate **0.94** | report | `examples/07_external_positive_control.py` |
-| test suite: **254** total; **253** pass + **1** skip with PyBaMM (real-cell test needs the dataset; **254** pass with it); base install **237** pass + **17** deselect | README, report | `pytest`, `pytest -m "not pybamm and not oxford"` |
+| test suite: **256** total; **255** pass + **1** skip with PyBaMM (real-cell test needs the dataset; **256** pass with it); base install **239** pass + **17** deselect | README, report | `pytest`, `pytest -m "not pybamm and not oxford"` |
 | real-cell (Tier 3): all eight Oxford cells fade **−38.0% to −20.0%**; deployable ECM estimate **−0.2% to +14.3%** (wrong in sign, a phantom gain on **7/8**); **REFUSE_MODEL_BIAS 104/104** in both OCV modes, coverage **0/104** | REAL_CELL, CLAIMS C19 | `examples/08_real_cell.py` *(needs the licensed dataset)* |
 | depth (v0.8): a fixed 2nd-order observer changes **0/208** verdicts; largest \|1st−2nd\| estimate **1.7×10⁻¹⁴**, lack-of-fit **2.8×10⁻¹¹** (round-off) — the refusal is not a model-order artefact | REAL_CELL §Depth, CLAIMS C20 | `examples/08_real_cell.py` *(needs the licensed dataset)* |
 | fit-dynamics (v0.9): a **4-param** `(R0,Q,R1,C1)` fit changes **1/208** verdicts (not a diagnosis); capacity estimate moves ≤**3.57%**, lack-of-fit ratio median **0.960**; **VIF(R1) ≈ 287 ≫ 10** (unidentifiable) but capacity's VIF stays ~4 — **H1 (de-confounding) falsified and retracted** | REAL_CELL §Fit-dynamics, CLAIMS C21 | `examples/08_real_cell.py` *(dataset)*; positive control `pytest tests/test_dynamics_fit.py` |

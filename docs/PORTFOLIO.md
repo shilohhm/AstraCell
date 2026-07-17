@@ -40,7 +40,7 @@ model-bias gate that prices the observer's own structural error, an estimator, a
 Carlo calibration harness, an external PyBaMM plant, a positive control, and — in v0.6–v0.9 — a
 real-cell run across all eight cells of the Oxford dataset — on every cell the first-order ECM is
 directionally wrong and AstraCell refuses it, a refusal neither a second-order observer (v0.8) nor a
-4-parameter fit of the fast dynamics (v0.9) moves. The core is numpy-only; 254 tests assert theorems,
+4-parameter fit of the fast dynamics (v0.9) moves. The core is numpy-only; 256 tests assert theorems,
 not observed numbers. Built in five
 science passes (v0.0 → v0.4), since packaged and taken to eight measured cells.
 

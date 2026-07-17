@@ -20,6 +20,7 @@ declines wisely from one that declines always::
     build_evidence  ->  {prepare_raw, prepare_paired}  ->  run_trials  ->  detection_metrics
 """
 
+from astracell.calibration.excitation import vif_under_excitation
 from astracell.calibration.external import (
     C1_TARGET,
     CAPACITY_TARGET,
@@ -108,4 +109,5 @@ __all__ = [
     "sample_count_curve",
     "two_sided_z",
     "verdict_distribution",
+    "vif_under_excitation",
 ]

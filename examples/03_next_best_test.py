@@ -6,7 +6,7 @@ AstraCell refused to diagnose a 40% cooling fault on cell 10 (no thermocouple). 
 is half an answer. This is the other half: rank the diagnostic tests a BMS could actually
 command, by how much each would sharpen *the hypothesis we asked about*.
 
-Five acts:
+Six acts:
 
 1. Rank by D-optimality (``det FIM``) and watch it crown the wrong test -- because it is
    optimising the volume of a confidence ellipsoid whose other axes nobody asked about.
@@ -19,6 +19,11 @@ Five acts:
    DC and whitening destroys it. The recommendation inverts.
 5. Shrink the fault until no test, no sensor, and no affordable protocol reaches the
    threshold. Watch AstraCell refuse, and say what it would take.
+6. Ask the same question of v0.9's fitted dynamics: which excitation makes the RC branch
+   ``(R1, C1)`` identifiable? A pulse train the BMS can command drops ``VIF(R1)`` below the
+   gate a 1C discharge leaves it far above -- the prescription that earns the branch. Its
+   honest limit: the same test does not earn the *capacity* verdict, whose refusal is model
+   bias, not confounding, and no excitation removes bias.
 """
 
 from __future__ import annotations
@@ -31,6 +36,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from astracell.calibration import (
+    C1_TARGET,
+    CAPACITY_TARGET,
+    R1_TARGET,
+    build_external_observer,
+    constant_profile,
+    external_specs_4param,
+    pulse_profile,
+    vif_under_excitation,
+)
+from astracell.cell.ocv import NMC_LIKE
 from astracell.duty import pulse_train
 from astracell.observability import (
     ParameterSpec,
@@ -55,6 +71,12 @@ FIGURES = Path(__file__).resolve().parents[1] / "reports" / "figures"
 SEED = 0
 BLIND_CELL = 10
 MAGNITUDE = 0.40
+
+# Act 6: the single-cell ECM the v0.9 dynamics fit runs on, mirroring the positive control --
+# a ~5 Ah cell discharged over a 600 s window from 90% SOC.
+ECM_CAP = 5.0
+ECM_N = 600
+ECM_SOC0 = 0.9
 
 
 def rule(title: str) -> None:
@@ -233,6 +255,64 @@ def main() -> None:
     print("   8%: nothing in the library, no sensor, and no affordable protocol reaches")
     print("       5 sigma. The honest output is a refusal plus the reason.")
     print("\n  A diagnostic that cannot say 'I cannot see this' is not a diagnostic.")
+
+    # ------------------------------------------------------------------- act 6
+    rule("6. The same question for v0.9's fitted dynamics: what excitation earns R1, C1?")
+    print("  Acts 1-5 planned the next-best-test for a thermal fault on the pack. v0.9 (fit the")
+    print("  dynamics) asks it of a different fault: a single cell's fast RC branch, now fitted as")
+    print("  (R0, capacity, R1, C1). VIF is read off the FIM, so it scores a profile before the")
+    print("  BMS ever commands it -- the same Ds-logic, a new target.\n")
+
+    ecm = build_external_observer(NMC_LIKE, ECM_CAP)
+    specs4 = external_specs_4param()
+    excitations = {
+        "constant 1.0C (Oxford)": constant_profile(ECM_CAP, 1.0, ECM_N),
+        "pulse 60s @0.5C": pulse_profile(ECM_CAP, mean_c_rate=0.4, pulse_c_rate=0.5, n_time=ECM_N),
+        "pulse 60s @1C": pulse_profile(ECM_CAP, mean_c_rate=0.5, pulse_c_rate=1.0, n_time=ECM_N),
+        "pulse 120s @1C": pulse_profile(
+            ECM_CAP, mean_c_rate=0.5, pulse_c_rate=1.0, n_time=ECM_N, period_s=120.0
+        ),
+    }
+    vifs = {
+        name: vif_under_excitation(ecm, cur, soc0=ECM_SOC0, specs=specs4)
+        for name, cur in excitations.items()
+    }
+    peaks = {name: float(np.max(np.abs(cur)) / ECM_CAP) for name, cur in excitations.items()}
+
+    print(f"    {'excitation':<22s} {'peak':>5s} {'VIF R1':>8s} {'VIF C1':>8s}   verdict")
+    for name, v in vifs.items():
+        clears = v[R1_TARGET] < 10.0
+        print(
+            f"    {name:<22s} {peaks[name]:4.2f}C {v[R1_TARGET]:8.2f} {v[C1_TARGET]:8.2f}   "
+            f"{'identifiable' if clears else 'CONFOUNDED'}"
+        )
+
+    base = vifs["constant 1.0C (Oxford)"]
+    print(f"\n  1C discharge: VIF(R1) {base[R1_TARGET]:.1f} >> 10 -- R1 is collinear with R0.")
+    print("  On the real Oxford cell it is worse: a median ~287 (REAL_CELL.md, Fit the dynamics).")
+
+    crossings = [(peaks[n], n, v) for n, v in vifs.items() if v[R1_TARGET] < 10.0]
+    if crossings:
+        cheap = min(crossings, key=lambda c: c[0])
+        best = min(crossings, key=lambda c: c[2][R1_TARGET])
+        print(
+            f"  cheapest crossing : {cheap[1]} at {cheap[0]:.2f}C peak -> VIF(R1) "
+            f"{cheap[2][R1_TARGET]:.2f} (just clears 10)."
+        )
+        print(
+            f"  most identifiable : {best[1]} -> VIF(R1) {best[2][R1_TARGET]:.2f}"
+            " -- identifiable under a pulse the BMS can command."
+        )
+
+    caps = np.array([v[CAPACITY_TARGET] for v in vifs.values()])
+    print("\n  But this earns the DYNAMICS, not the capacity verdict. Capacity's VIF barely moves")
+    print(
+        f"  across every excitation ({caps.min():.1f}..{caps.max():.1f}) -- it was never the"
+        " confounded parameter."
+    )
+    print("  The real-cell capacity verdict is REFUSE_MODEL_BIAS, a bias gate blind to VIF, and")
+    print("  harder excitation only routes that bias, never removes it (examples/04, part 4).")
+    print("  Two failures, two fixes: excitation for the dynamics, an OCV-drift observer for Q.")
 
     # ------------------------------------------------------------------- figure
     fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.4), sharey=True)

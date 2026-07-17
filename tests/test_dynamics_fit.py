@@ -24,6 +24,7 @@ import pytest
 
 from astracell.calibration import (
     C1_TARGET,
+    CAPACITY_TARGET,
     R1_TARGET,
     PairedEvidence,
     build_evidence,
@@ -34,6 +35,7 @@ from astracell.calibration import (
     external_specs_4param,
     pulse_profile,
     run_trials,
+    vif_under_excitation,
 )
 from astracell.cell.ocv import NMC_LIKE, OcvCurve, ocv_from_table
 from astracell.observability.decision import VerdictKind
@@ -308,3 +310,78 @@ def test_the_four_param_paired_path_is_null_on_identical_traces() -> None:
     ev = _pc_evidence("r1_ohm", R1_TARGET, 0.0, _pc_pulse())
     assert ev.paired_estimate == pytest.approx(0.0, abs=1e-9)
     assert ev.misfit_paired == pytest.approx(0.0, abs=1e-9)
+
+
+# ================================================= planning the excitation that earns the dynamics
+#
+# VIF is read off the FIM at the nominal, so it is data-independent -- it scores a current profile
+# a BMS could command *before* commanding it. That turns v0.9's refusal into a prescription: here
+# is the pulse that would make R1 identifiable. The honest other half, pinned below, is that the
+# prescription earns the DYNAMICS and not the capacity verdict -- capacity's refusal is model bias,
+# which no excitation removes. This is the machinery examples/03 act 6 prints.
+
+
+def _excitation_library() -> dict[str, np.ndarray]:
+    """A 1C discharge (the Oxford regime) and pulse trains a BMS could actually command."""
+    return {
+        "constant_1.0C": constant_profile(PC_CAP, 1.0, PC_N),
+        "constant_0.5C": constant_profile(PC_CAP, 0.5, PC_N),
+        "pulse_120s": pulse_profile(
+            PC_CAP, mean_c_rate=0.5, pulse_c_rate=1.0, n_time=PC_N, period_s=120.0
+        ),
+        "pulse_60s": pulse_profile(
+            PC_CAP, mean_c_rate=0.5, pulse_c_rate=1.0, n_time=PC_N, period_s=60.0
+        ),
+        "pulse_30s": pulse_profile(
+            PC_CAP, mean_c_rate=0.5, pulse_c_rate=1.0, n_time=PC_N, period_s=30.0
+        ),
+    }
+
+
+def test_a_pulse_train_plans_the_r1_identifiability_a_1c_discharge_denies() -> None:
+    """The planner scores excitation from the FIM alone: a pulse clears VIF(R1), a 1C does not.
+
+    ``vif_under_excitation`` needs no measured data, so it ranks a current profile the cell has
+    never seen -- the forward half of v0.9's refusal. Under a 1C discharge R1 is collinear with R0
+    (VIF ~ 66); a pulse train re-opens the RC transient and drops VIF(R1) and VIF(C1) below the
+    separability gate. Same verdict as the data-driven positive control above, by design alone.
+    """
+    observer = _pc_observer()
+    specs = external_specs_4param()
+
+    const = vif_under_excitation(observer, _pc_const(), soc0=PC_SOC0, specs=specs)
+    pulse = vif_under_excitation(
+        observer,
+        pulse_profile(PC_CAP, mean_c_rate=0.5, pulse_c_rate=1.0, n_time=PC_N, period_s=120.0),
+        soc0=PC_SOC0,
+        specs=specs,
+    )
+
+    assert const[R1_TARGET] > 10.0  # measured ~66: R1 confounded with R0 under a 1C discharge
+    assert pulse[R1_TARGET] < 10.0  # measured ~6.4: the pulse separates them
+    assert pulse[C1_TARGET] < 10.0  # measured ~2.0: C1 identifiable once the transient re-opens
+
+
+def test_capacity_identifiability_is_excitation_insensitive_unlike_r1() -> None:
+    """The honest caveat, measured: excitation is R1's lever, not capacity's.
+
+    Across the library VIF(R1) swings ~10x and crosses the gate (66 -> 6); VIF(capacity) swings
+    under 2x and never leaves the neighbourhood of the line. Capacity is not the confounded
+    parameter -- its real-cell refusal is REFUSE_MODEL_BIAS, a bias no pulse removes (examples/04,
+    WHAT_DID_NOT_WORK 6). So a pulse that identifies the dynamics still does not earn the capacity
+    diagnosis; pinning this stops the prescription from overclaiming.
+    """
+    observer = _pc_observer()
+    specs = external_specs_4param()
+    vifs = [
+        vif_under_excitation(observer, cur, soc0=PC_SOC0, specs=specs)
+        for cur in _excitation_library().values()
+    ]
+
+    r1 = np.array([v[R1_TARGET] for v in vifs])
+    cap = np.array([v[CAPACITY_TARGET] for v in vifs])
+
+    assert r1.min() < 10.0 < r1.max()  # excitation moves R1 across the separability gate
+    # R1's identifiability is excitation-driven (~10x swing); capacity's is not (~1.6x). Measured
+    # ratio-of-swings ~6.4; asserted at 3x so it pins the decoupling, not the exact numbers.
+    assert (r1.max() / r1.min()) > 3.0 * (cap.max() / cap.min())

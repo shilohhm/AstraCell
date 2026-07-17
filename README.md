@@ -144,7 +144,7 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/07_external_positive_control.py` | and when that cell is really broken, does it notice? |
 | `pip install -e ".[oxford]"` · `python scripts/fetch_oxford.py` | add the Oxford real-cell dataset (ODC-ODbL, ~254 MB licensed download) |
 | `python examples/08_real_cell.py` | Tier 3: score the observer against a real cell's measured fade (skips without the data) |
-| `python -m pytest` | 254 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
+| `python -m pytest` | 256 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
 | `python -m ruff check src tests examples scripts` · `python -m mypy` | lint · type-check |
 
 `make check` runs lint + typecheck + test; `make help` lists every target. The full

@@ -263,7 +263,11 @@ interpretable: the machinery diagnoses the branch when the data can identify it,
 cannot. The forward-pointing corollary — the v1.0 thesis in miniature — is that the cheapest test to
 *earn* a diagnosis differs by parameter: a pulse train would earn `R1`/`C1`, but **not** capacity,
 whose phantom is OCV drift and needs a different fix (a moving-OCV model, or a fit over a window where
-the drift is inactive). See [CLAIMS.md](CLAIMS.md) C21 and
+the drift is inactive). `examples/03` act 6 makes this a **computed prescription rather than a claim**:
+ranking candidate excitations by VIF, a pulse train the BMS can command drops `VIF(R1)` from ~66 on the
+ECM (worse here, ~287) below the gate, while capacity's VIF barely moves across *every* excitation —
+so the identifying test for the dynamics is measurably **not** the capacity's, and no excitation earns
+the capacity verdict. See [CLAIMS.md](CLAIMS.md) C21 and
 [LIMITATIONS.md §16f](../LIMITATIONS.md#16-the-real-cell-is-contact-not-validation).
 
 ## A note on units: the run corrected the Readme
