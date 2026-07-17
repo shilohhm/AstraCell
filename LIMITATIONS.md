@@ -715,4 +715,41 @@ model bias the gate now catches for fresh confounding — v0.9's problem, and th
 nothing about its outcome. What §16e settles is narrow and worth stating plainly: the refusal in §16a
 is a property of a real cell exceeding the ECM, **not** of the ECM's model order. `examples/08` prints
 the depth table; `tests/test_second_order.py` pins the branch physics; see
-[docs/REAL_CELL.md](docs/REAL_CELL.md) and CLAIMS C20.
+[docs/REAL_CELL.md](docs/REAL_CELL.md) and CLAIMS C20. The remaining door — *fitting* the branch — is
+§16f.
+
+### 16f. Fitting the fast dynamics is inert on the capacity verdict too — H1 falsified (v0.9)
+
+§16e closed the *fixed*-branch door: a second RC branch the observer does not fit is invisible to the
+`(R0, capacity)` estimate. It named the door still open — model order can enter the verdict only by
+*fitting* the dynamics — and left its outcome to v0.9. v0.9 walked through it. It reran the identical
+eight-cell loop a third time with the first-order observer refit over **four** parameters,
+`(R0, capacity, R1, C1)`, so the fast RC branch is *estimated*, not held fixed. Two hypotheses were
+pre-registered ([docs/V0.9_PLAN.md](docs/V0.9_PLAN.md)): **H1**, that fitting `R1,C1` absorbs the
+dynamic misfit and slides the phantom capacity toward the truth (the hoped-for less-wrong win); and
+**H2**, that `R1,C1` are unidentifiable from a 1C discharge, so the verdict turns `REFUSE_CONFOUNDED`
+(the honest bet).
+
+**H1 is falsified, and is retracted.** Over all 208 evaluations: the capacity verdict changes on
+**1/208** (a lone marginal age, not a shift toward DIAGNOSE), the largest `|2-param − 4-param|`
+estimate is **3.57%** (Cell1 +10.50% → +9.52%), the phantom *gain* persists on 7 of 8 cells, and the
+lack-of-fit falls by a median of only ~4%. Fitting the branch does not rescue the capacity estimate.
+
+The result is **H0-dominant, with H2 confirmed only where it cannot reach the verdict.** `R1` is
+genuinely unidentifiable from a 1C discharge — its VIF is **~287**, far past the 10 line, exactly H2's
+information-poverty mechanism — but that confounding is **quarantined to `R1`**. Capacity's own VIF
+stays ~4 and its CRLB inflates ~2.5%, so capacity stays identifiable and its refusal reason stays
+`REFUSE_MODEL_BIAS`, never `REFUSE_CONFOUNDED`. The phantom is **OCV drift**, which fitting a fast RC
+branch cannot touch — the per-age control that removes OCV drift is the only thing that moves the
+estimate, and it moves it the *wrong* way (§16a). So §16f completes the arc §16e began: a *fixed*
+branch is invisible to the capacity fit, and a *fitted* branch is inert on it too, because a 1C
+discharge cannot identify the branch at all.
+
+This is a statement about the **excitation, not the estimator**, and unlike §16e it is guarded by a
+positive control that proves the difference. `tests/test_dynamics_fit.py` shows the same 4-parameter
+fit recovers an injected `R1`/`C1` change *exactly* under a pulse train (VIF < 10) and refuses the
+identical `R1` fault as `REFUSE_CONFOUNDED` under a 1C discharge — so a real-cell refusal says *this
+experiment* cannot identify the branch, not that the code cannot. It points forward too: the cheapest
+test to earn a diagnosis differs by parameter (a pulse train earns `R1,C1`; the capacity phantom needs
+a moving-OCV model, not more parameters) — the active-experiment-design loop the v1.0 trust region
+generalises. `examples/08` prints the fit-dynamics table; see CLAIMS C21.

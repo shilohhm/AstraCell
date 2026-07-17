@@ -1,4 +1,4 @@
-# Real-cell contact: the Oxford Battery Degradation Dataset (Tier 3, v0.6–v0.8)
+# Real-cell contact: the Oxford Battery Degradation Dataset (Tier 3, v0.6–v0.9)
 
 Every result in this repository before v0.6 is synthetic. Tier 1 tests the ECM against itself and
 against a mismatch we hand-wrote; Tier 2 tests it against PyBaMM, an electrochemical simulator we
@@ -11,10 +11,13 @@ machinery still does *not* establish.
 > real run — v0.7 across **all eight cells**, a first-order ECM, and a refusal on every one of 208
 > evaluations; v0.8 reran the *identical* loop with a **second-order** observer and the verdict did
 > not move on a single evaluation (largest change 1.7×10⁻¹⁴), so the refusal is not a model-order
-> artefact. You reproduce them by fetching the data and re-running `examples/08`; the offline test
-> suite exercises the whole pipeline on *synthetic* Oxford-format data so it stays green without the
-> download. This establishes that AstraCell knows when it cannot trust the ECM on a real cell — and
-> nothing broader. See [CLAIMS.md](CLAIMS.md) C19–C20 and [LIMITATIONS.md](../LIMITATIONS.md) §16.
+> artefact; v0.9 went further and *fitted* the fast RC branch — a 4-parameter `(R0, Q, R1, C1)` fit —
+> and it too is inert on the capacity verdict (1/208 changed, phantom persists), because a 1C
+> discharge cannot identify the branch (VIF(R1) ≈ 287). You reproduce them by fetching the data and
+> re-running `examples/08`; the offline test suite exercises the whole pipeline on *synthetic*
+> Oxford-format data so it stays green without the download. This establishes that AstraCell knows
+> when it cannot trust the ECM on a real cell — and nothing broader. See [CLAIMS.md](CLAIMS.md)
+> C19–C21 and [LIMITATIONS.md](../LIMITATIONS.md) §16.
 
 ## Why this is the right next step, and what makes it different
 
@@ -210,6 +213,58 @@ now catches for the confounding the extra freedom invites. That is the honest ne
 it is **not** asserted here. `tests/test_second_order.py` pins the branch's physics — superposition,
 energy balance, inert when absent — and the matched-observer self-consistency this rests on. See
 [CLAIMS.md](CLAIMS.md) C20 and [LIMITATIONS.md §16e](../LIMITATIONS.md#16-the-real-cell-is-contact-not-validation).
+
+## Fit the dynamics (v0.9): fitting the branch is inert on the capacity verdict too
+
+v0.8 showed a *fixed* second RC branch is invisible to the `(R0, capacity)` fit. That left one door
+open: model order can still enter the verdict by *fitting* the dynamics. v0.9 opens it — it reruns the
+identical eight-cell loop a third time with the first-order observer refit over **four** parameters,
+`(R0, capacity, R1, C1)`: the fast RC branch is now *estimated*, not held fixed. The pre-registered
+question ([V0.9_PLAN.md](V0.9_PLAN.md)) was whether that **de-confounds** the capacity verdict (H1,
+the hoped-for less-wrong win) or merely **trades model bias for confounding** (H2, the honest bet).
+Both were written down before the run.
+
+The measured answer, over all 208 evaluations (`examples/08` prints this table):
+
+| | 2-param `(R0, Q)` | 4-param `(R0, Q, R1, C1)` |
+|---|---|---|
+| capacity verdicts changed | — | **1 / 208** |
+| Cell1 shared-OCV estimate | +10.50% | **+9.52%** |
+| largest \|2p − 4p\| estimate, all 208 | — | **3.57%** |
+| lack-of-fit ratio 4p/2p (median) | — | **0.960** |
+| VIF(R1) median · VIF(C1) median | — | **287 · 4.83** |
+| capacity CRLB inflation (σ₄ₚ/σ₂ₚ, median) | — | **1.025** |
+
+**H1 is falsified, and is retracted.** Fitting the fast RC branch does not rescue the capacity
+estimate: it moves it by at most **3.57%** (Cell1 +10.50% → +9.52%), the phantom *gain* persists
+against a real fade on 7 of 8 cells, the lack-of-fit falls only ~4%, and the capacity verdict changes
+on **1 of 208** evaluations — Cell5's cyc2300, where the near-zero estimate tips from
+`REFUSE_MODEL_BIAS` to `REFUSE_UNOBSERVABLE` (a refusal becoming a *different* refusal, the estimate
+falling below the noise), **not** the hoped shift toward DIAGNOSE. Across all 208 four-parameter
+evaluations not one becomes DIAGNOSE or WEAK. The private hope loses to the data.
+
+**The outcome is H0-dominant, with H2 confirmed only where it cannot matter.** R1 *is* genuinely
+unidentifiable from a 1C discharge — its VIF is **~287**, far past the 10 threshold — exactly H2's
+information-poverty mechanism. But that confounding is **quarantined to R1**: capacity's own VIF stays
+~4 and its CRLB inflates only ~2.5%, so capacity stays identifiable and its refusal reason stays
+`REFUSE_MODEL_BIAS` (the moving OCV), never `REFUSE_CONFOUNDED`. The phantom is an OCV-drift
+phenomenon — which is why the per-age control makes it *worse*, not better (see §Results) — and no
+amount of RC fitting on a 1C discharge reaches it.
+
+This **sharpens** v0.8 into the complete arc: a *fixed* branch is invisible to the capacity fit (v0.8,
+because the sensitivities do not contain it); a *fitted* branch is **inert** on it too (v0.9), for the
+distinct reason that a 1C discharge cannot identify the branch at all.
+
+**The estimator is not broken — the excitation is poor**, and that distinction has a positive control.
+`tests/test_dynamics_fit.py` shows the *same* 4-parameter fit recovers an injected `R1`/`C1` change
+**exactly** under a pulse train (Gauss-Newton to ~10⁻¹⁰; VIF < 10), and refuses the *identical* `R1`
+fault as `REFUSE_CONFOUNDED` under a 1C discharge (VIF ≈ 67). So the real-cell refusal is
+interpretable: the machinery diagnoses the branch when the data can identify it, and abstains when it
+cannot. The forward-pointing corollary — the v1.0 thesis in miniature — is that the cheapest test to
+*earn* a diagnosis differs by parameter: a pulse train would earn `R1`/`C1`, but **not** capacity,
+whose phantom is OCV drift and needs a different fix (a moving-OCV model, or a fit over a window where
+the drift is inactive). See [CLAIMS.md](CLAIMS.md) C21 and
+[LIMITATIONS.md §16f](../LIMITATIONS.md#16-the-real-cell-is-contact-not-validation).
 
 ## A note on units: the run corrected the Readme
 

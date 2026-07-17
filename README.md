@@ -59,7 +59,7 @@ claim at a higher one.
 |---|---|---|
 | **1 — internal self-consistency and synthetic experiments** | Within AstraCell's own models, plus theorems about the estimator | Extensive |
 | **2 — independently developed external simulator** | Against PyBaMM, a simulator AstraCell did not implement | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault | **Contact, not validation.** v0.7 ran all eight cells: the ECM is directionally wrong on every one and AstraCell refuses all 208 evaluations; v0.8 confirmed the refusal survives a second-order observer (0/208 verdicts change) ([REAL_CELL](docs/REAL_CELL.md)) — eight cells, not validation |
+| **3 — physical battery validation** | A measured cell, a real fault | **Contact, not validation.** v0.7 ran all eight cells: the ECM is directionally wrong on every one and AstraCell refuses all 208 evaluations; v0.8 confirmed the refusal survives a second-order observer (0/208 verdicts change), and v0.9 that *fitting* the fast RC branch is inert on it too (1/208, H1 falsified — the branch is unidentifiable from a 1C discharge) ([REAL_CELL](docs/REAL_CELL.md)) — eight cells, not validation |
 
 ## What the evidence shows
 
@@ -116,7 +116,10 @@ The rest of the argument, each finding linked to its example, test, and figure i
   fading 20–38%, the first-order ECM's capacity estimate comes back wrong in *sign* — a phantom
   *gain* on seven of eight (+10.5% at Cell1's end of life against a −24.2% fade, ~1150σ from truth);
   AstraCell returns `REFUSE_MODEL_BIAS` on all 104 scored ages in both OCV modes (coverage 0/104,
-  208/208 evaluations). Eight-cell contact with a battery, and the honest outcome. *(`examples/08`,
+  208/208 evaluations). Neither a second-order observer (v0.8) nor *fitting* the fast RC branch — a
+  4-parameter `(R0, Q, R1, C1)` fit (v0.9) — moves that verdict: the branch is unidentifiable from a
+  1C discharge (VIF(R1) ≈ 287), so the pre-registered hope that it would de-confound is falsified.
+  Eight-cell contact with a battery, and the honest outcome. *(`examples/08`,
   [REAL_CELL](docs/REAL_CELL.md))*
 
 ## Install and run
@@ -141,7 +144,7 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python examples/07_external_positive_control.py` | and when that cell is really broken, does it notice? |
 | `pip install -e ".[oxford]"` · `python scripts/fetch_oxford.py` | add the Oxford real-cell dataset (ODC-ODbL, ~254 MB licensed download) |
 | `python examples/08_real_cell.py` | Tier 3: score the observer against a real cell's measured fade (skips without the data) |
-| `python -m pytest` | 246 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
+| `python -m pytest` | 254 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
 | `python -m ruff check src tests examples scripts` · `python -m mypy` | lint · type-check |
 
 `make check` runs lint + typecheck + test; `make help` lists every target. The full

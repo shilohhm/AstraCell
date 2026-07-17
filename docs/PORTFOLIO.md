@@ -37,10 +37,11 @@ An identifiability engine (Fisher/CRLB) with two ordered gates — separability 
 detectability (SNR) — that returns DIAGNOSE, WEAK, or one of three refusals, each with a
 recommendation where one exists (instrument a cell, or excite it harder). Around it: a
 model-bias gate that prices the observer's own structural error, an estimator, a Monte
-Carlo calibration harness, an external PyBaMM plant, a positive control, and — in v0.6–v0.8 — a
+Carlo calibration harness, an external PyBaMM plant, a positive control, and — in v0.6–v0.9 — a
 real-cell run across all eight cells of the Oxford dataset — on every cell the first-order ECM is
-directionally wrong and AstraCell refuses it, a refusal a second-order observer leaves unchanged
-(v0.8). The core is numpy-only; 246 tests assert theorems, not observed numbers. Built in five
+directionally wrong and AstraCell refuses it, a refusal neither a second-order observer (v0.8) nor a
+4-parameter fit of the fast dynamics (v0.9) moves. The core is numpy-only; 254 tests assert theorems,
+not observed numbers. Built in five
 science passes (v0.0 → v0.4), since packaged and taken to eight measured cells.
 
 ## How I know it works
@@ -83,9 +84,12 @@ cell and v0.7 widened it to all eight (Oxford Cell1–8) — and it refused ever
 ECM's capacity estimate came back wrong in *sign* on seven of eight (a +10.5% "gain" against Cell1's
 measured −24.2% fade, ≈1150σ from truth), REFUSE_MODEL_BIAS on all 104 scored ages in both OCV modes
 (208/208). v0.8 checked whether a *second-order* observer would rescue the estimate; it does not — a
-fixed second RC branch changes 0/208 verdicts (largest change 10⁻¹⁴) — so the refusal is not a
-model-order artefact, though *fitting* the extra dynamics (v0.9) is untested. That is **contact, not
-validation** — eight cells but one chemistry, no fault detected, the ECM confirmed nowhere; the
+fixed second RC branch changes 0/208 verdicts (largest change 10⁻¹⁴). v0.9 then *fitted* the fast RC
+branch — a 4-parameter `(R0, Q, R1, C1)` fit — and it too is inert (1/208 changed, phantom persists):
+`R1` is unidentifiable from a 1C discharge (VIF ≈ 287), so the pre-registered hope that fitting would
+de-confound (H1) is **falsified** — with a positive control proving the same fit recovers an injected
+`R1,C1` exactly under a pulse train, so the limit is the excitation, not the code. That is **contact,
+not validation** — eight cells but one chemistry, no fault detected, the ECM confirmed nowhere; the
 refusal is the honest result, not a green light.
 Every Tier 1/2 result above is still conditional on models that have otherwise not touched a cell —
 the OCV curves are stand-ins, so every SNR is a statement about a model, not a battery. The Cramér–Rao bound is variance-only and blind to

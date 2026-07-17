@@ -159,9 +159,34 @@ def external_specs() -> tuple[ParameterSpec, ...]:
     return (ParameterSpec(0, ParamKind.R0), ParameterSpec(0, ParamKind.CAPACITY))
 
 
-#: Indices into ``external_specs()``. The fault target is one of these two.
+def external_specs_4param() -> tuple[ParameterSpec, ...]:
+    """v0.9's fitted set: ``(R0, capacity, R1, C1)`` -- the fast RC branch now *fitted*, not fixed.
+
+    v0.8 proved a fixed second RC branch is invisible to ``(R0, capacity)``; the only way model
+    order can move the capacity verdict is to fit the dynamics, which this set does. R0 and capacity
+    keep indices 0 and 1, so ``R0_TARGET`` / ``CAPACITY_TARGET`` still address them and every
+    2-param caller is untouched; ``R1_TARGET`` / ``C1_TARGET`` reach the two new columns.
+
+    The branch is identifiable only under rich excitation: VIF(R1) and VIF(C1) fall below 10 under a
+    pulse train but sit far above it under a 1C discharge, where ``dV/dR1`` collapses onto its R0
+    twin -- the whole of v0.9. H1 (de-confounding) holds if fitting the branch rescues the cell's
+    capacity estimate; H2 (confounding) if a 1C discharge cannot identify it. The positive control
+    proves the estimator *can* recover the branch before any cell is scored.
+    """
+    return (
+        ParameterSpec(0, ParamKind.R0),
+        ParameterSpec(0, ParamKind.CAPACITY),
+        ParameterSpec(0, ParamKind.R1),
+        ParameterSpec(0, ParamKind.C1),
+    )
+
+
+#: Indices into the fitted spec tuple. R0/capacity share indices across the 2- and 4-param sets;
+#: R1/C1 exist only in ``external_specs_4param()``.
 R0_TARGET: int = 0
 CAPACITY_TARGET: int = 1
+R1_TARGET: int = 2
+C1_TARGET: int = 3
 
 
 def external_scenario(
@@ -175,6 +200,7 @@ def external_scenario(
     use_bias_gate: bool = True,
     fault_magnitude: float = 0.0,
     target_index: int = CAPACITY_TARGET,
+    specs: tuple[ParameterSpec, ...] | None = None,
     temp0_k: float = 298.15,
 ) -> Scenario:
     """A one-cell, voltage-only scenario whose plant is supplied externally.
@@ -184,10 +210,16 @@ def external_scenario(
     a harmful overclaim is the observer diagnosing a fault on a sound cell. v0.4 injects a real
     degradation and sets it accordingly; see ``calibration.positive_control``.
 
-    ``target_index`` selects which of ``external_specs()`` carries the hypothesis: ``R0_TARGET``
-    for a series-resistance fault, ``CAPACITY_TARGET`` (the default, and v0.3's) for capacity.
+    ``target_index`` selects which of ``specs`` carries the hypothesis: ``R0_TARGET`` for a
+    series-resistance fault, ``CAPACITY_TARGET`` (the default, and v0.3's) for capacity, and -- with
+    the 4-parameter set -- ``R1_TARGET`` / ``C1_TARGET`` for the fast RC branch.
+
+    ``specs`` defaults to the 2-parameter ``external_specs()`` (R0, capacity), the set every version
+    through v0.8 fitted. Pass ``external_specs_4param()`` to fit the dynamics too (v0.9). The plant
+    trace is voltage-only and one cell either way, so the choice is purely which parameters the
+    observer is allowed to move.
     """
-    specs = external_specs()
+    specs = specs if specs is not None else external_specs()
     return Scenario(
         name=name,
         params=observer,

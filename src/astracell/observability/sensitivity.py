@@ -45,13 +45,22 @@ DEFAULT_EPS: float = 1e-3
 class ParamKind(StrEnum):
     """Parameters the Fisher information is computed over.
 
-    The first three are per-cell physical parameters, perturbed *relatively*.
-    ``CURRENT_BIAS`` is a pack-global **nuisance** parameter, perturbed in amps.
+    All but the last are per-cell physical parameters, perturbed *relatively*: the three the fault
+    heatmap ranges over (``R0``, ``CAPACITY``, ``HA``) plus the fast RC branch (``R1``, ``C1``) that
+    v0.9 promotes from fixed forward structure to *fitted* dynamics. ``CURRENT_BIAS`` is a
+    pack-global **nuisance** parameter, perturbed in amps.
+
+    ``ParamKind.value`` is the ``PackParams`` field the perturbation scales, so ``R1``/``C1`` need
+    no new plumbing -- ``perturb`` -> ``scale_cell`` already reaches ``r1_ohm``/``c1_farad``. R1 and
+    C1 are deliberately *not* in ``CELL_PARAM_KINDS``: they are opt-in for the dynamics fit, not
+    defaults the heatmap sweeps.
     """
 
     R0 = "r0_ohm"
     CAPACITY = "capacity_ah"
     HA = "ha_w_per_k"
+    R1 = "r1_ohm"
+    C1 = "c1_farad"
     CURRENT_BIAS = "current_bias_a"
 
 
@@ -92,7 +101,13 @@ class ParameterSpec:
     def label(self) -> str:
         if self.kind is ParamKind.CURRENT_BIAS:
             return "I_bias"
-        short = {ParamKind.R0: "R0", ParamKind.CAPACITY: "Q", ParamKind.HA: "hA"}[self.kind]
+        short = {
+            ParamKind.R0: "R0",
+            ParamKind.CAPACITY: "Q",
+            ParamKind.HA: "hA",
+            ParamKind.R1: "R1",
+            ParamKind.C1: "C1",
+        }[self.kind]
         return f"{short}[{self.cell}]"
 
     def unit(self) -> str:

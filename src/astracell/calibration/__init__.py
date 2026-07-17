@@ -21,12 +21,15 @@ declines wisely from one that declines always::
 """
 
 from astracell.calibration.external import (
+    C1_TARGET,
     CAPACITY_TARGET,
     R0_TARGET,
+    R1_TARGET,
     build_external_observer,
     build_second_order_observer,
     constant_profile,
     external_scenario,
+    external_specs_4param,
     observer_voltage,
     prepare_external,
     pulse_profile,
@@ -67,10 +70,12 @@ from astracell.calibration.scenario import (
 )
 
 __all__ = [
+    "C1_TARGET",
     "CAPACITY_TARGET",
     "NOMINAL_FAULT",
     "NOMINAL_LEVELS",
     "R0_TARGET",
+    "R1_TARGET",
     "AbstentionMetrics",
     "DetectionMetrics",
     "PairedEvidence",
@@ -90,6 +95,7 @@ __all__ = [
     "detection_metrics",
     "differential_voltage",
     "external_scenario",
+    "external_specs_4param",
     "observer_voltage",
     "paired_noise",
     "paired_scenario",

@@ -20,7 +20,7 @@ one.
 |---|---|---|
 | **1 — internal self-consistency and synthetic experiments** | Demonstrated within AstraCell's own models, and by theorems about the estimator | Extensive: identifiability, calibration, model-bias accounting all measured |
 | **2 — independently developed external simulator** | Tested against PyBaMM — an electrochemical simulator AstraCell did not implement, whose mismatch it did not design | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.7 ran all eight real cells (Oxford Cell1–8) and the ECM refused every age; v0.8 showed that refusal is not a model-order artefact (a second-order observer changes 0/208 verdicts). No validation, one chemistry. Stated, not hidden |
+| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.7 ran all eight real cells (Oxford Cell1–8) and the ECM refused every age; v0.8 showed that refusal is not a model-order artefact (a fixed second-order observer changes 0/208 verdicts); v0.9 that *fitting* the fast RC branch is inert on it too (1/208, H1 falsified — unidentifiable from a 1C discharge). No validation, one chemistry. Stated, not hidden |
 
 Everything in §4 is labelled by tier. Everything in §6 is why Tier 3 has no *validation* — eight cells of contact (§7.1) do not make one.
 
@@ -249,8 +249,13 @@ contact do not make one — and here is the full account of why. The complete le
   Tier 1/2 result remains conditional on models that have otherwise not touched a cell. This is still
   the largest gap in the project. v0.8 confirmed the refusal is not a *first-order* artefact — a
   *fixed* second-order observer changes 0/208 verdicts (largest estimate change 10⁻¹⁴), the RC branch
-  cancelling in the `R0`/capacity sensitivities — but did **not** test *fitting* the extra dynamics,
-  a 4→6-parameter problem that trades model bias for confounding, still open (v0.9).
+  cancelling in the `R0`/capacity sensitivities. v0.9 went further and *fitted* the fast branch — a
+  4-parameter `(R0, Q, R1, C1)` fit — and it too is inert on the capacity verdict (1/208 changed,
+  phantom persists): `R1` is unidentifiable from a 1C discharge (VIF ≈ 287), so the pre-registered
+  hope that fitting would de-confound (**H1**) is **falsified**, the confounding quarantined to `R1`
+  while capacity stays `REFUSE_MODEL_BIAS`. A positive control shows the same fit recovers an injected
+  `R1,C1` *exactly* under a pulse train — the limit is the excitation, not the code
+  ([REAL_CELL.md](REAL_CELL.md) §Fit-dynamics).
 - **The OCV curves are stand-ins.** `NMC_LIKE` uses a Li-polymer fit; `LFP_LIKE` is
   hand-built. Every SNR and CRLB is a statement about *this model*. Replace `cell/ocv.py`
   with measured tables before quoting a figure elsewhere.
@@ -283,10 +288,12 @@ Only for the faults this machinery says are worth chasing and can be trusted:
    both OCV modes; [REAL_CELL.md](REAL_CELL.md), [LIMITATIONS §16](../LIMITATIONS.md)). That is
    contact, not validation. v0.8 then asked whether that refusal is a *model-order* artefact and found
    it is not — a *fixed* second-order observer changes no verdict (0/208, largest estimate change
-   10⁻¹⁴). So the honest next step for the observer is to *fit* the added dynamics
-   (`R0,Q,R1,C1 → +R2,C2`, v0.9) — a 4→6-parameter identifiability problem that trades model bias for
-   confounding — alongside a same-day baseline, other chemistries and formats, and an observer that
-   can express real OCV drift, to learn whether the refusal ever becomes a trustworthy diagnosis.
+   10⁻¹⁴). v0.9 went further and *fitted* the fast branch (`R0,Q → R0,Q,R1,C1`): inert too — 1/208
+   verdicts changed, the phantom persists — because `R1` is unidentifiable from a 1C discharge
+   (VIF ≈ 287), so the pre-registered hope that fitting would de-confound (H1) is falsified. The
+   phantom is OCV drift, unreachable by fitting fast dynamics. So the honest next steps lie elsewhere:
+   a same-day baseline, other chemistries and formats, and an observer that can express real OCV drift
+   (the actual phantom), to learn whether the refusal ever becomes a trustworthy diagnosis.
 2. **DFN with degradation submodels**, and **injected capacity fade** — which requires
    giving up the shared-OCV control that currently isolates dynamic mismatch, so it is a
    larger change than it looks.

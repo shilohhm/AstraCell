@@ -166,6 +166,44 @@ not.
 
 ---
 
+## 8. Fitting the fast dynamics did not de-confound the capacity verdict — H1, pre-registered and falsified
+
+v0.8 proved a *fixed* second RC branch is invisible to the `(R0, capacity)` fit (0/208
+verdicts), and pinned the conclusion that model order can only matter if the added
+dynamics are *fitted*. v0.9 pre-registered that fit as a testable hope — **H1**, in
+`docs/V0.9_PLAN.md`, written before the run: turning the paired estimator into a
+4-parameter fit `(R0, capacity, R1, C1)` would absorb the dynamic misfit polluting the
+capacity fit and slide the phantom from **+10%** toward the true **−24%**, or drop the
+lack-of-fit materially — the first directionally-sane real-cell estimate.
+
+**Measurement falsified H1, and it is retracted.** Across all eight Oxford cells
+(`python examples/08_real_cell.py`), fitting `R1,C1` changed the capacity verdict on
+**1/208** scored ages — and that one change is `REFUSE_MODEL_BIAS → REFUSE_UNOBSERVABLE`
+(Cell5, cyc2300, estimate `+0.64% → +0.03%`, below the noise floor), **not** a diagnosis.
+No age became `DIAGNOSE` or `WEAK`. Cell1's phantom barely moved, `+10.50% → +9.52%`; the
+largest capacity move anywhere was **3.57%**; the lack-of-fit ratio (4-param / 2-param)
+had median **0.960**. The misfit is essentially untouched because the dominant residual is
+the **moving OCV**, which fitting the fast branch does not address (the pre-registered
+**H0**).
+
+**The confounding H2 predicted is real, but quarantined to `R1`.** A 1C discharge cannot
+identify the fast branch — **VIF(R1) median ≈ 287 ≫ 10** — exactly the information-poverty
+H2 warned of. But it does not leak into capacity: capacity's VIF stays ~4 and its CRLB σ
+inflates only ×**1.025**, so the capacity refusal never flips to `REFUSE_CONFOUNDED`. The
+mechanism is confirmed; its hoped-for (H1) *and* feared (H2-on-capacity) effects on the
+verdict are both absent.
+
+**What made this interpretable — the positive control passed first** (the v0.4 lesson,
+§7). On ECM data with a pulse train, the same 4-parameter gauss-newton recovers injected
+`R1 0.15 → 0.1500` and `C1 0.30 → 0.3000` with zero cross-talk, and the same `R1` fault is
+`DIAGNOSE`d under pulses yet `REFUSE_CONFOUNDED` under constant current
+(`python -m pytest tests/test_dynamics_fit.py`). So the real-cell null is not a broken
+fit: it is a true statement that a 1C discharge lacks the excitation to identify the
+branch, and that the phantom is OCV drift regardless. v0.9 *sharpens* v0.8 — fixed branch
+invisible, fitted branch inert — rather than overturning it.
+
+---
+
 ## What survived every attempt to break it
 
 For balance — these were attacked and did not break:
