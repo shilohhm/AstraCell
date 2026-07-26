@@ -1,6 +1,6 @@
 """Open-circuit voltage curves.
 
-HONESTY NOTE — read before using any number this module produces
+HONESTY NOTE - read before using any number this module produces
 ----------------------------------------------------------------
 Neither curve below is fitted to measured data for a specific commercial cell.
 

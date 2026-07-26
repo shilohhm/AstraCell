@@ -1,4 +1,4 @@
-# AstraCell — Technical Report
+# AstraCell - Technical Report
 
 The canonical, detailed account of what AstraCell is, what it proves, and how each claim
 was tested. The [README](../README.md) is the five-minute version; this is where the
@@ -18,11 +18,11 @@ one.
 
 | Tier | Meaning | Where AstraCell stands |
 |---|---|---|
-| **1 — internal self-consistency and synthetic experiments** | Demonstrated within AstraCell's own models, and by theorems about the estimator | Extensive: identifiability, calibration, model-bias accounting all measured |
-| **2 — independently developed external simulator** | Tested against PyBaMM — an electrochemical simulator AstraCell did not implement, whose mismatch it did not design | The phantom-fault refusal and the positive control |
-| **3 — physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.7 ran all eight real cells (Oxford Cell1–8) and the ECM refused every age; v0.8 showed that refusal is not a model-order artefact (a fixed second-order observer changes 0/208 verdicts); v0.9 that *fitting* the fast RC branch is inert on it too (1/208, H1 falsified — unidentifiable from a 1C discharge). No validation, one chemistry. Stated, not hidden |
+| **1 - internal self-consistency and synthetic experiments** | Demonstrated within AstraCell's own models, and by theorems about the estimator | Extensive: identifiability, calibration, model-bias accounting all measured |
+| **2 - independently developed external simulator** | Tested against PyBaMM - an electrochemical simulator AstraCell did not implement, whose mismatch it did not design | The phantom-fault refusal and the positive control |
+| **3 - physical battery validation** | A measured cell, a real fault, a real dataset | **Contact, not validation.** v0.7 ran all eight real cells (Oxford Cell1-8) and the ECM refused every age; v0.8 showed that refusal is not a model-order artefact (a fixed second-order observer changes 0/208 verdicts); v0.9 that *fitting* the fast RC branch is inert on it too (1/208, H1 falsified - unidentifiable from a 1C discharge). No validation, one chemistry. Stated, not hidden |
 
-Everything in §4 is labelled by tier. Everything in §6 is why Tier 3 has no *validation* — eight cells of contact (§7.1) do not make one.
+Everything in §4 is labelled by tier. Everything in §6 is why Tier 3 has no *validation* - eight cells of contact (§7.1) do not make one.
 
 ---
 
@@ -34,11 +34,11 @@ sensor budget is radically asymmetric:
 | Quantity | Real coverage | Consequence |
 |---|---|---|
 | Cell voltage | one per cell, ~1 mV | per-cell voltage faults **are** identifiable |
-| Temperature | **4–12 sensors for ~96 cells**, ±0.5–1 K | per-cell thermal faults mostly **are not** |
+| Temperature | **4-12 sensors for ~96 cells**, ±0.5-1 K | per-cell thermal faults mostly **are not** |
 | Current | **pack-level only**, one shunt | per-cell current is inferred, never measured |
 
 So "highlight the faulty cell on a 3D pack map" is, for thermal faults, *undecidable* from
-real telemetry. Most battery-diagnostic projects render the map anyway — reporting
+real telemetry. Most battery-diagnostic projects render the map anyway - reporting
 confidence without first establishing whether the fault was ever observable. A classifier
 built on that footing is confident exactly where it should be silent.
 
@@ -56,23 +56,23 @@ against it.
 **Identifiability is the logically prior question.** Before "which fault is it?" comes "is
 that question answerable from this data?" AstraCell answers the second. The tool is the
 **Fisher Information Matrix** of the pack's parameters under the actual sensor topology and
-the **Cramér–Rao lower bound** it implies — a bound on the variance of *every* unbiased
+the **Cramér-Rao lower bound** it implies - a bound on the variance of *every* unbiased
 estimator, not of one algorithm. When the bound says a 40% cooling fault sits at 1.2σ, no
 detector anyone writes will find it, and the honest thing to render is grey. The grey cells
 fall out of the bound, not out of a distance-to-sensor heuristic.
 
 The two ideas are two kinds of error: **variance** (how finely a *correct* model could be
-pinned down — the CRLB) and **bias** (how far a *wrong* model lands from the truth however
+pinned down - the CRLB) and **bias** (how far a *wrong* model lands from the truth however
 clean the data). Keeping them apart is the whole discipline.
 
 ## 3. What AstraCell does
 
-Four things, and deliberately not a fifth (there is no fault classifier — that is the
+Four things, and deliberately not a fifth (there is no fault classifier - that is the
 point):
 
 1. **Identifiability.** Compute `FIM = SᵀΣ⁻¹S` over every cell's parameters, then the CRLB,
    the VIF (separability), and the SNR (detectability). Two gates in order: **isolation**
-   (`VIF > 10` ⇒ confounded) then **detection** (`≥5σ` diagnose, `2–5σ` weak, `<2σ`
+   (`VIF > 10` ⇒ confounded) then **detection** (`≥5σ` diagnose, `2-5σ` weak, `<2σ`
    refuse). Isolation is first because two parameters can be jointly well-determined while
    individually unidentifiable.
 2. **Model bias.** Against a higher-fidelity plant, compute the structural bias
@@ -91,7 +91,7 @@ costs a matrix slice, not a re-simulation. Full derivations are in the
 
 The longest section, by design. Organised by validation tier.
 
-### Tier 1 — internal self-consistency and synthetic experiments
+### Tier 1 - internal self-consistency and synthetic experiments
 
 Demo pack throughout: a 4×8 grid, 32 cells, 32 voltage + 4 temperature channels
 (thermocouples on cells 4/12/20/28) + one current shunt, 1 mV / 0.5 K noise, 1200 s of
@@ -112,7 +112,7 @@ a battery.
 | cooling −40% on cell 12 | **yes** | ±7.31% | **5.5σ** | DIAGNOSE |
 | cooling −40% on cell 10 | no | ±32.4% | **1.2σ** | **REFUSE** |
 
-Cooling faults are identifiable on **4 of 32** cells — exactly the instrumented ones. And
+Cooling faults are identifiable on **4 of 32** cells - exactly the instrumented ones. And
 identifiability is **not monotone in grid distance**: the sensor's next-door neighbour
 (cell 3, 1.33σ) is beaten by a far pack corner (cell 0, 1.55σ), because a corner has fewer
 conduction paths and so warms more. A hop-count heuristic gets this backwards; the Fisher
@@ -120,20 +120,20 @@ information does not.
 
 **Refusal comes with a fix, and excitation can substitute for a sensor.** For the refused
 cell 10, a counterfactual thermocouple lifts the cooling SNR from 1.24σ to **5.71σ** (a
-4.6× tighter bound) — or, with no new hardware, a **1.83C** pulse makes the cell's own
+4.6× tighter bound) - or, with no new hardware, a **1.83C** pulse makes the cell's own
 voltage work as a thermometer through `R0(T)` (SNR 0.06σ → 3.17σ → 15.37σ as excitation
 goes 0.05C → 1.39C → 2.50C).
 
 **Excitation buys isolation, not merely precision** (`examples/02`). Carrying the pack
 current as a nuisance parameter, under pulsed excitation the cost is near nil (`R0` ×1.00,
 capacity ×1.18). Under **constant current** the design collapses: `R0` cost ×6.50, worst
-VIF 261.7 — a constant offset is indistinguishable from every cell being slightly more
+VIF 261.7 - a constant offset is indistinguishable from every cell being slightly more
 resistive.
 
 **Correlated noise reallocates information** (`examples/02`). Modelling AFE 1/f noise as
 AR(1), at `rho = 0.99` relative to white noise: capacity ×10.2 (worse), `R0` ×0.39 and
 `hA` ×0.38 (*better*). A thermocouple's share of cooling information collapses from 90.4%
-(`rho=0`) to 0.8% (`rho=0.99`) — a thermal time constant is DC against a 1 Hz sampler, so
+(`rho=0`) to 0.8% (`rho=0.99`) - a thermal time constant is DC against a 1 Hz sampler, so
 whitening annihilates it. One headline verdict flips (`hA` on the instrumented cell 12,
 5.46σ → 1.93σ REFUSE at `rho=0.9`), and the instrumented-beats-uninstrumented ordering
 inverts at `rho=0.99`. The old assumption that idealisations only flatter the bound was
@@ -143,14 +143,14 @@ false in both directions (see [WHAT_DID_NOT_WORK](WHAT_DID_NOT_WORK.md) §2).
 D-optimality (`det FIM`) crowns a 900 s cooldown (5.39σ) because it sharpens parameters
 nobody asked about; Ds-optimality crowns a pulse train (**7.96σ**). Running it takes the
 blind cell from 1.40σ (REFUSE) to 7.96σ (DIAGNOSE) with no new hardware. When nothing in
-the library clears the threshold — an 8% fault under 1/f noise — AstraCell says so.
+the library clears the threshold - an 8% fault under 1/f noise - AstraCell says so.
 
 **The CRLB is attained** (`examples/05`). Under a matched model the MLE's interval coverage
-tracks nominal (54.4/79.6/91.2/95.6/99.2% at 50/80/90/95/99% nominal) — the first evidence
+tracks nominal (54.4/79.6/91.2/95.6/99.2% at 50/80/90/95/99% nominal) - the first evidence
 in the repository that the bound is *reached*, not merely asserted, and an end-to-end check
 of the noise sampler, whitening, and interval arithmetic.
 
-**The bound cannot see model bias — the central Tier-1 result** (`examples/04`). Run the
+**The bound cannot see model bias - the central Tier-1 result** (`examples/04`). Run the
 first-order ECM observer against a higher-fidelity internal plant (SOC-dependent `R0`, a
 diffusion branch, a core/surface split, a laggy thermocouple). The fit converges not on the
 truth but on the pseudo-true `θ₀ = θ* + b`:
@@ -162,7 +162,7 @@ truth but on the pseudo-true `θ₀ = θ* + b`:
 | cooling −40% | 1.40σ | +1043% | 0.04σ | REFUSE (unobservable) |
 
 Fitting a first-order ECM over a 20-minute window **manufactures an apparent 18.5%
-capacity loss** — nearly four times the 5% fault it was asked to find — because a slow
+capacity loss** - nearly four times the 5% fault it was asked to find - because a slow
 polarisation droop is arithmetically indistinguishable from lost coulombs. And **more data
 makes it worse, not better**: replicate 10 000×, and the reported SNR climbs from 146σ to
 **14 611σ** while the credible SNR sits fixed at 6.49σ. The bias is invariant to
@@ -171,11 +171,11 @@ of §2, now a measurement.
 
 Two corollaries that indict other parts of the system, honestly:
 - **Excitation routes bias, it does not remove it.** 0.25C → 2.5C drives `R0`'s bias
-  through zero and capacity's from −2.2% to −19.3% — so the Ds-optimal planner of §3 will
+  through zero and capacity's from −2.2% to −19.3% - so the Ds-optimal planner of §3 will
   sharpen a capacity estimate while destroying its credibility (ceiling 2.26σ → 0.26σ). It
   optimises variance and is blind to bias.
 - **A nuisance parameter is where model error hides.** Freeing the current bias collapses
-  capacity's bias from −18.5% to +0.3% — but reports a shunt offset of +1.11 A that is
+  capacity's bias from −18.5% to +0.3% - but reports a shunt offset of +1.11 A that is
   model error in disguise, inside its prior and flagged by nothing.
 
 **Calibration makes the numbers worse, correctly** (`examples/05`). Under mismatch the
@@ -183,10 +183,10 @@ variance-only interval covers the truth **0% of the time** at every nominal leve
 estimate cloud tightens by 100× onto the pseudo-true −35.5%, never the −5% truth. The
 model-bias gate turns those confident errors into refusals, dropping the harmful-overclaim
 rate on capacity from **100% to 0%**. The capacity fault v0.0 diagnosed at 32.6σ is now
-refused — because 30 of those sigmas were the observer's own model error. Worse numbers,
+refused - because 30 of those sigmas were the observer's own model error. Worse numbers,
 and the only kind worth trusting.
 
-### Tier 2 — independently developed external simulator (PyBaMM)
+### Tier 2 - independently developed external simulator (PyBaMM)
 
 The mismatch above was four terms *we* chose. Tier 2 replaces the plant with **PyBaMM**, an
 electrochemical simulator AstraCell did not implement, whose SPMe electrolyte diffusion the
@@ -196,7 +196,7 @@ coverage, and gate are unchanged; PyBaMM only fills the data slot. Reproduce wit
 (both need PyBaMM).
 
 **The phantom fault** (`examples/06`). On a **perfectly healthy** cell the observer reports
-a capacity deviation of **−67.6% ± 0.145% — 466σ from the truth of zero** — mistaking the
+a capacity deviation of **−67.6% ± 0.145% - 466σ from the truth of zero** - mistaking the
 slow diffusion droop for capacity loss. A self-consistency control (an ECM-generated trace
 through the same pipeline) covers at nominal to within **0.011**, so the collapse is the
 external simulator's mismatch, not our plumbing. Without the gate the observer diagnoses
@@ -204,8 +204,8 @@ this phantom in every trial at every C-rate; the bias gate refuses all of them (
 100% → 0%). The one number *not* to quote is the −67.6% itself: it swings +114% → −68% with
 C-rate. Its instability is the proof it is not a capacity loss ([WHAT_DID_NOT_WORK](WHAT_DID_NOT_WORK.md) §5).
 
-**The positive control** (`examples/07`). A negative control — a healthy cell, correctly
-not diagnosed — is passed by a system that never diagnoses anything, and v0.3 shipped one
+**The positive control** (`examples/07`). A negative control - a healthy cell, correctly
+not diagnosed - is passed by a system that never diagnoses anything, and v0.3 shipped one
 of those: its bias gate was a pure-noise statistic (`E[SNR²]=1` for any input) that refused
 20 mV of sine, a 1718% ramp, and a real doubled-resistance fault alike. v0.4 injects real
 PyBaMM faults and scores AstraCell as a detector. With a healthy baseline and a lack-of-fit
@@ -213,15 +213,15 @@ gate:
 
 | scenario | true fault | true positive | false positive | refusal |
 |---|---|---|---|---|
-| healthy cell | — | — | **0.00** | 0.95 |
-| real fault (+5.00 mΩ contact R) | +20% `R0` | **0.94** | — | 0.00 |
-| confounded (diffusivity ×0.3) | none | — | **0.00** | **1.00** |
+| healthy cell | - | - | **0.00** | 0.95 |
+| real fault (+5.00 mΩ contact R) | +20% `R0` | **0.94** | - | 0.00 |
+| confounded (diffusivity ×0.3) | none | - | **0.00** | **1.00** |
 
 The paired estimator recovers the injected fault at **+20.0000%** with zero cross-talk, and
-refuses the confounder it cannot express — the capacity hypothesis at **1.98σ against a
+refuses the confounder it cannot express - the capacity hypothesis at **1.98σ against a
 2.00σ threshold**, by one percent (pinned as a regression test). **Diagnosis is not
 detection**: without the baseline, a doubled series resistance is diagnosed in every trial
-at +91.4% against a truth of +100% — an 8.6-point miss inside a 0.23%-wide interval (145σ). Scoring only overclaim rewards
+at +91.4% against a truth of +100% - an 8.6-point miss inside a 0.23%-wide interval (145σ). Scoring only overclaim rewards
 silence; `detection_metrics` scores a true positive as *DIAGNOSE ∧ interval covers ∧ sign
 right*, so the true-positive rate saturates at 0.94, not 1.00 (a 95% interval misses 5% by
 construction).
@@ -237,24 +237,24 @@ None is hidden, and each is pinned by a test.
 
 ## 6. What it cannot claim
 
-The second-longest section, deliberately. Tier 3 has no *validation* — v0.7's eight cells of
-contact do not make one — and here is the full account of why. The complete ledger is
+The second-longest section, deliberately. Tier 3 has no *validation* - v0.7's eight cells of
+contact do not make one - and here is the full account of why. The complete ledger is
 [LIMITATIONS.md](../LIMITATIONS.md); the essentials:
 
 - **No physical battery validates this.** v0.7 ran the observer against all eight real Oxford cells
-  and it *refused* every one — the first-order ECM's capacity estimate wrong in sign on seven of
+  and it *refused* every one - the first-order ECM's capacity estimate wrong in sign on seven of
   eight (+10.5% against Cell1's measured −24.2% fade, ≈1150σ from truth), REFUSE_MODEL_BIAS on all
   104 scored ages in both OCV modes (208/208; §7.1, [REAL_CELL.md](REAL_CELL.md)). That is contact,
   not validation: eight cells but one chemistry, no fault detected, the ECM confirmed nowhere. Every
   Tier 1/2 result remains conditional on models that have otherwise not touched a cell. This is still
-  the largest gap in the project. v0.8 confirmed the refusal is not a *first-order* artefact — a
+  the largest gap in the project. v0.8 confirmed the refusal is not a *first-order* artefact - a
   *fixed* second-order observer changes 0/208 verdicts (largest estimate change 10⁻¹⁴), the RC branch
-  cancelling in the `R0`/capacity sensitivities. v0.9 went further and *fitted* the fast branch — a
-  4-parameter `(R0, Q, R1, C1)` fit — and it too is inert on the capacity verdict (1/208 changed,
+  cancelling in the `R0`/capacity sensitivities. v0.9 went further and *fitted* the fast branch - a
+  4-parameter `(R0, Q, R1, C1)` fit - and it too is inert on the capacity verdict (1/208 changed,
   phantom persists): `R1` is unidentifiable from a 1C discharge (VIF ≈ 287), so the pre-registered
   hope that fitting would de-confound (**H1**) is **falsified**, the confounding quarantined to `R1`
   while capacity stays `REFUSE_MODEL_BIAS`. A positive control shows the same fit recovers an injected
-  `R1,C1` *exactly* under a pulse train — the limit is the excitation, not the code
+  `R1,C1` *exactly* under a pulse train - the limit is the excitation, not the code
   ([REAL_CELL.md](REAL_CELL.md) §Fit-dynamics).
 - **The OCV curves are stand-ins.** `NMC_LIKE` uses a Li-polymer fit; `LFP_LIKE` is
   hand-built. Every SNR and CRLB is a statement about *this model*. Replace `cell/ocv.py`
@@ -263,7 +263,7 @@ contact do not make one — and here is the full account of why. The complete le
   model-bias apparatus exists because of this, and it is a *screen, not a bound*: on the one
   case with known truth the lack-of-fit screen captures only **31%** of the bias it warns
   about. A structural error three times smaller would have slipped through.
-- **The internal mismatch plant is four hand-chosen terms** — a *lower bound* on how wrong
+- **The internal mismatch plant is four hand-chosen terms** - a *lower bound* on how wrong
   the observer is, not a measurement of it.
 - **The positive control's baseline is the identical simulation**, which no workshop can
   supply, so its detection rates are **upper bounds** on what any real baseline could
@@ -283,23 +283,23 @@ Only for the faults this machinery says are worth chasing and can be trusted:
 1. **More chemistries, and a better observer for them.** v0.6 took the first measured-cell step and
    v0.7 widened it to all eight cells: `plant/oxford.py` turns the Oxford Battery Degradation Dataset
    into a measured pseudo-OCV and a 1C-discharge pair, and `examples/08` scored the observer against
-   each cell's own measured fade across the whole dataset — where the first-order ECM came back
+   each cell's own measured fade across the whole dataset - where the first-order ECM came back
    directionally wrong on every cell and AstraCell refused every age (REFUSE_MODEL_BIAS 104/104 in
    both OCV modes; [REAL_CELL.md](REAL_CELL.md), [LIMITATIONS §16](../LIMITATIONS.md)). That is
    contact, not validation. v0.8 then asked whether that refusal is a *model-order* artefact and found
-   it is not — a *fixed* second-order observer changes no verdict (0/208, largest estimate change
-   10⁻¹⁴). v0.9 went further and *fitted* the fast branch (`R0,Q → R0,Q,R1,C1`): inert too — 1/208
-   verdicts changed, the phantom persists — because `R1` is unidentifiable from a 1C discharge
+   it is not - a *fixed* second-order observer changes no verdict (0/208, largest estimate change
+   10⁻¹⁴). v0.9 went further and *fitted* the fast branch (`R0,Q → R0,Q,R1,C1`): inert too - 1/208
+   verdicts changed, the phantom persists - because `R1` is unidentifiable from a 1C discharge
    (VIF ≈ 287), so the pre-registered hope that fitting would de-confound (H1) is falsified. The
    phantom is OCV drift, unreachable by fitting fast dynamics. So the honest next steps lie elsewhere:
    a same-day baseline, other chemistries and formats, and an observer that can express real OCV drift
    (the actual phantom), to learn whether the refusal ever becomes a trustworthy diagnosis.
-2. **DFN with degradation submodels**, and **injected capacity fade** — which requires
+2. **DFN with degradation submodels**, and **injected capacity fade** - which requires
    giving up the shared-OCV control that currently isolates dynamic mismatch, so it is a
    larger change than it looks.
 3. **Ramped fault onsets** and **concurrent multi-cell faults**, both currently idealised
    away.
-4. **A classifier / residual bank** — built last, on the faults the identifiability layer
+4. **A classifier / residual bank** - built last, on the faults the identifiability layer
    has certified as answerable and trustworthy. Building it first would reproduce exactly
    the failure mode this project exists to refuse.
 
@@ -315,14 +315,14 @@ covariance, `r = plant(θ*) − observer(θ*)` a residual.
   pack-global current-bias nuisance with a Van Trees prior. Additive across independent
   experiments; Loewner-monotone in sensors. Code: `observability.fisher`.
 - **CRLB.** `Var(θ̂_j) ≥ [FIM⁻¹]_jj`. Computed by eigendecomposition, discarding directions
-  at floating-point noise and returning `inf` for unidentified parameters — **not** `pinv`,
+  at floating-point noise and returning `inf` for unidentified parameters - **not** `pinv`,
   whose minimum-norm solution would report finite variance for parameters the data cannot
   constrain. Code: `observability.fisher.crlb`.
 - **VIF.** `VIF_j = FIM_jj·[FIM⁻¹]_jj ≥ 1`; the isolation gate. Not `cond(FIM)`, which is
   dominated by the single worst-informed direction.
 - **SNR.** `|magnitude|/√CRLB`, magnitude-independent under local linearisation.
 - **AR(1) whitening.** Whitening is a scaled first difference
-  `(x[t] − ρ·x[t−1])/√(1−ρ²)`; its effect on information is an exact reciprocal pair — a DC
+  `(x[t] − ρ·x[t−1])/√(1−ρ²)`; its effect on information is an exact reciprocal pair - a DC
   sensitivity keeps `(1−ρ)/(1+ρ)`, an alternating one gains `(1+ρ)/(1−ρ)`. Cross-checked
   against a densely-inverted correlation matrix in `tests/test_noise_correlation.py` (the
   test that caught the sign bug).

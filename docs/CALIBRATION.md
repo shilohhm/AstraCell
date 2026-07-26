@@ -26,14 +26,14 @@ realised data**. So v0.2 adds the smallest honest one: `observability.estimator`
 simpler ECM observer to a noisy measurement vector and returns an estimate `θ̂`, a CRLB-derived
 interval, and a verdict. Two estimators, chosen per experiment:
 
-- **`fit_linear`** — one weighted-least-squares projection, exact for a linear-Gaussian model,
+- **`fit_linear`** - one weighted-least-squares projection, exact for a linear-Gaussian model,
   covariance exactly `FIM⁻¹`. The workhorse for the magnitude sweeps.
-- **`fit_gauss_newton`** — damped fixed-information Gauss-Newton against the true *nonlinear*
+- **`fit_gauss_newton`** - damped fixed-information Gauss-Newton against the true *nonlinear*
   observer. Its scatter matches the CRLB only up to the model's curvature, which is what makes
   "the bound is attained" a measurement rather than a tautology.
 
-AstraCell v0.0–v0.1 was an **identifiability oracle**: *is this fault answerable?* v0.2 wraps a
-**detector** around it — *given this data, do I answer, and am I right to?* — purely so the
+AstraCell v0.0-v0.1 was an **identifiability oracle**: *is this fault answerable?* v0.2 wraps a
+**detector** around it - *given this data, do I answer, and am I right to?* - purely so the
 oracle's confidence can be audited. The detector is a means to calibration, not a product.
 
 ---
@@ -48,7 +48,7 @@ Five distinct questions, deliberately kept apart.
 2. **Calibration of diagnosis vs refusal.** When the detector fires DIAGNOSE, is the fault real
    and its magnitude inside the interval? When it REFUSES, was refusal the right call?
 3. **Calibration under variance-only uncertainty.** With a *matched* model the only error is
-   noise. Does coverage track nominal? (It should — the estimator is efficient.)
+   noise. Does coverage track nominal? (It should - the estimator is efficient.)
 4. **Calibration under structural bias.** With a *mismatched* model the estimate is centred on
    the pseudo-true value `θ₀ = θ* + b`. The variance-only interval, still `± z·σ`, is now a
    whole bias away from the truth. Does it still cover? (It must not, and does not.)
@@ -62,17 +62,17 @@ Five distinct questions, deliberately kept apart.
 
 ## 2. The harness
 
-`calibration.run_trials(scenario, n_trials, seed)` fixes a known truth — fault kind, magnitude
+`calibration.run_trials(scenario, n_trials, seed)` fixes a known truth - fault kind, magnitude
 (including zero, the null), target cell, topology, noise, excitation, plant mismatch, and
-whether the observer may use its bias estimate to gate — then draws `n_trials` independent
+whether the observer may use its bias estimate to gate - then draws `n_trials` independent
 noise realisations and, for each, records: the estimate `θ̂`, the variance-only SNR `|θ̂|/σ`,
 the bias-aware SNR `|θ̂|/√(σ²+b²)`, the CRLB `σ`, the structural bias `b`, the verdict, and
 whether the truth lies inside the claimed interval.
 
-Determinism is a hard requirement — a calibration claim you cannot reproduce is not one. A
+Determinism is a hard requirement - a calibration claim you cannot reproduce is not one. A
 single seeded generator drives every draw, so `(scenario, n_trials, seed)` yields bit-identical
-arrays. The noise it draws (`sensors.sampling`) has covariance *exactly* `Σ = σ²R` — the same
-`Σ` the Fisher information inverts — so the empirical estimator covariance is comparable to the
+arrays. The noise it draws (`sensors.sampling`) has covariance *exactly* `Σ = σ²R` - the same
+`Σ` the Fisher information inverts - so the empirical estimator covariance is comparable to the
 CRLB and not to some other matrix. That identity is checked directly:
 `test_the_sampled_noise_whitens_to_white`.
 
@@ -91,7 +91,7 @@ its interval coverage tracks nominal:
 
 This is the first evidence in the repository that the CRLB is not merely a bound but a *reached*
 one. It also validates the noise sampler, the whitening, and the interval arithmetic end to end
-— the exact class of bug that the AR(1) whitening error (see `LIMITATIONS.md` §2a) once hid.
+- the exact class of bug that the AR(1) whitening error (see `LIMITATIONS.md` §2a) once hid.
 
 ### 3b. Variance-only intervals are overconfident under mismatch
 
@@ -110,7 +110,7 @@ The variance-only observer is not slightly optimistic. It is certain, and wrong.
 
 Repeat the mismatched experiment `k` times. The variance-only SNR grows as `√k` without bound;
 the bias-aware SNR saturates at the ceiling `|m|/|b| ≈ 0.17σ` and stops. The estimate cloud
-tightens by 100× onto **−35.5%** — the pseudo-true value — while the truth, −5%, is never
+tightens by 100× onto **−35.5%** - the pseudo-true value - while the truth, −5%, is never
 approached.
 
 | repeats | 1 | 100 | 10 000 |
@@ -133,7 +133,7 @@ model-bias gate on converts them into refusals:
 | cooling | 4% | 0% |
 
 Capacity is the headline: the gate eliminates a 100% overclaim rate entirely, by refusing. R0 is
-the honest caveat — its structural bias is small, so the gate rarely fires, and the residual 18%
+the honest caveat - its structural bias is small, so the gate rarely fires, and the residual 18%
 overclaim (a real R0 fault whose *magnitude* is biased past its tight interval) is a defect no
 gate fixes. The gate widens uncertainty for the parameter the model gets badly wrong; it does
 not, and cannot, repair a parameter the model gets slightly wrong everywhere.
@@ -141,7 +141,7 @@ not, and cannot, repair a parameter the model gets slightly wrong everywhere.
 ### 3e. Verdict distribution vs fault magnitude
 
 Sweeping the true fault size under mismatch: R0's diagnosis rate climbs from 0 to 1 as the fault
-clears the noise — its bias is small, so it diagnoses freely. Capacity's diagnosis rate stays
+clears the noise - its bias is small, so it diagnoses freely. Capacity's diagnosis rate stays
 **0 across the entire sweep**: no matter how large the true capacity fault, the −30% structural
 bias keeps the credible SNR below threshold, and `REFUSE_MODEL_BIAS` dominates. Same gate,
 opposite outcomes, because one parameter's model error is fatal and the other's is not.
@@ -149,9 +149,9 @@ opposite outcomes, because one parameter's model error is fatal and the other's 
 ### 3f. When a recommendation stays calibrated
 
 Example 03 recommends adding a thermocouple or exciting harder. Under a *matched* model these
-work exactly as promised — a 2.5C pulse makes a blind cell's cooling fault fully diagnosable
+work exactly as promised - a 2.5C pulse makes a blind cell's cooling fault fully diagnosable
 (diagnosis rate 100%), excitation substituting for a sensor. Under *mismatch*, all of them
-refuse, and the only discriminating number is the ceiling — which does **not** track the
+refuse, and the only discriminating number is the ceiling - which does **not** track the
 variance-side SNR. A 2× window and a current-bias nuisance both raise variance-side confidence
 while *lowering* the ceiling (to 0.12σ and 0.08σ): more of the same excitation pours information
 into the cooling coefficient and moves the bias onto it. The flashiest recommendation is not the
@@ -168,7 +168,7 @@ opposite.
 
 A diagnostic is only as valuable as its willingness to abstain. A detector that always fires is
 a smoke alarm wired to the mains: loud, confident, and useless. The metric that matters is not
-the diagnosis rate but the **harmful-overclaim rate** — how often a confident answer is wrong —
+the diagnosis rate but the **harmful-overclaim rate** - how often a confident answer is wrong -
 and the gate drives it to zero on the parameter that needed it. That the price is a lower
 diagnosis rate is not a cost to be minimised; it is the mechanism working.
 
@@ -180,18 +180,18 @@ diagnosis rate is not a cost to be minimised; it is the mechanism working.
   model (`plant.mismatch`), so §3 is a *lower bound* on how wrong the observer is, not a
   measurement of it. Everything here is self-consistency.
 - **Calibration is conditional on the mismatch we wrote.** The bias gate is exactly as good as
-  the plant we guessed. A structural error of a different shape — a degraded cell, a
-  chemistry the ECM mismodels differently — would need its own accounting and might not be
+  the plant we guessed. A structural error of a different shape - a degraded cell, a
+  chemistry the ECM mismodels differently - would need its own accounting and might not be
   gated at all (the mismatch here is pack-global and common-mode; see `LIMITATIONS.md` §12d).
 - **The estimator is not the last word.** `fit_gauss_newton` is a fixed-information M-estimator,
   not the exact Newton MLE; its scatter matches the CRLB to the model's curvature, no further.
   At large faults the linearisation degrades, in a direction the coverage numbers would reveal
   but the point estimates alone would not.
 - **The thresholds and idealisations are still conventions.** 2σ/5σ, AR(1) noise, the
-  known-current default — calibration does not bless any of them. It calibrates the decisions
+  known-current default - calibration does not bless any of them. It calibrates the decisions
   *given* them.
 
 The honest one-line summary: **v0.2 proves AstraCell is honest about the model it assumes, and
-measurably dishonest the moment that model is wrong — which is exactly why the model-bias gate
+measurably dishonest the moment that model is wrong - which is exactly why the model-bias gate
 exists.** Whether the model resembles a cell is the next question, and it needs PyBaMM and, in
 the end, a bench.

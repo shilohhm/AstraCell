@@ -2,7 +2,7 @@
 
 > v0.3 proved AstraCell refuses. It could not prove AstraCell refuses *for a reason*.
 
-A negative control — a healthy cell, correctly not diagnosed — is passed by a diagnostic that
+A negative control - a healthy cell, correctly not diagnosed - is passed by a diagnostic that
 never diagnoses anything. v0.3 shipped one of those and did not know it. This document is how that
 was found, what replaced it, and how much of the replacement is real.
 
@@ -60,8 +60,8 @@ $$\mathrm{SNR}_{\text{total}} = \frac{|b + \varepsilon|}{\sqrt{\sigma^2 + b^2}},
 | a 1 V linear ramp (absurd) | **+1718.42%** | 1.0000 | 1.0000 | 1.00 | **300/300** |
 | a 1 µV whisper | −0.00% | 0.7685 | 0.9730 | 3.30 | 0/300 |
 
-Not a battery, not a fault, not physics. Whenever `|b| ≫ σ` — the only regime in which a bias gate
-has a job — the statistic concentrates on 1σ and `REFUSE_MODEL_BIAS` is *guaranteed*. The 1 µV row is
+Not a battery, not a fault, not physics. Whenever `|b| ≫ σ` - the only regime in which a bias gate
+has a job - the statistic concentrates on 1σ and `REFUSE_MODEL_BIAS` is *guaranteed*. The 1 µV row is
 the degenerate other end: `b → 0`, so it collapses to `|ε|/σ` and merely re-tests the noise.
 Uninformative in both directions.
 
@@ -80,8 +80,8 @@ degradation "bias" and refuses to see it. **v0.3's external gate had no discrimi
 experiment in v0.3 could have revealed that.** Only a positive control can.
 
 The trap is now documented at `prepare_external`, and pinned by
-`test_the_v03_external_gates_credibility_statistic_is_pure_noise`. The function keeps its behaviour —
-it is correct for the healthy-plant case it was written for — and gains a `baseline_voltage=`
+`test_the_v03_external_gates_credibility_statistic_is_pure_noise`. The function keeps its behaviour -
+it is correct for the healthy-plant case it was written for - and gains a `baseline_voltage=`
 argument that fixes it.
 
 ### 2a. Which of v0.3's claims survive
@@ -95,8 +95,8 @@ argument that fixes it.
 | Therefore calibrated abstention "survives" an external plant | **Corrected.** It survived by refusing everything. |
 
 Under v0.4's honest gate (§3), the same healthy cell scores `SNR_total = 3.24σ` on the capacity
-hypothesis: `WEAK_EVIDENCE`, not `REFUSE_MODEL_BIAS`. Harmful overclaim is still 0% — `WEAK` is not
-`DIAGNOSE` — so the headline result is **corrected, not retracted**. But "100% refusal" was an
+hypothesis: `WEAK_EVIDENCE`, not `REFUSE_MODEL_BIAS`. Harmful overclaim is still 0% - `WEAK` is not
+`DIAGNOSE` - so the headline result is **corrected, not retracted**. But "100% refusal" was an
 artifact of a tautological bias, and the true margin is one notch thinner than v0.3 reported.
 
 ---
@@ -106,8 +106,8 @@ artifact of a tautological bias, and the true margin is one notch thinner than v
 A bias must be measured on a plant known to be healthy. Given a healthy baseline `g_h` and a
 faulted trace `g_f` on the same excitation, the task's brief offered two corrections:
 
-1. **Baseline residual subtraction** — fit `g_f`, subtract `b_h = FIM⁻¹ Sᵀ Σ⁻¹ (g_h − f(θ*))`.
-2. **Paired healthy/faulty comparison** — fit `g_f − g_h` directly.
+1. **Baseline residual subtraction** - fit `g_f`, subtract `b_h = FIM⁻¹ Sᵀ Σ⁻¹ (g_h − f(θ*))`.
+2. **Paired healthy/faulty comparison** - fit `g_f − g_h` directly.
 
 They are **the same estimator**. The projection is linear:
 
@@ -117,14 +117,14 @@ Measured residual of the identity: **6.4 × 10⁻¹⁶**. There was never a choi
 `test_baseline_subtraction_and_paired_comparison_are_the_same_estimator` asserts it to 1e-12.
 
 What the identity does buy is the **honest noise**. Two measured traces carry two independent
-draws, so the differential has covariance `2Σ`. `paired_noise` doubles the variance exactly — not
+draws, so the differential has covariance `2Σ`. `paired_noise` doubles the variance exactly - not
 by scaling `voltage_sigma_v` by √2, which would leave the quantisation term `lsb²/12` behind and
-desynchronise the sampler from the FIM — and the CRLB widens to `√2·σ`. **Subtraction is not free.**
+desynchronise the sampler from the FIM - and the CRLB widens to `√2·σ`. **Subtraction is not free.**
 
 The third option in the brief, an *explicit mismatch prior*, is what v0.2's `parameter_bias` already
 is (`b` computed for a plant we guessed). It is unavailable here by construction: the whole point of
 an external plant is that we did not write it. The fourth, *conservative refusal when no baseline
-exists*, is the correct behaviour and is what v0.3 does — usefully, once you know that is what it is
+exists*, is the correct behaviour and is what v0.3 does - usefully, once you know that is what it is
 doing.
 
 ### 3a. What gates the corrected estimate
@@ -136,18 +136,18 @@ repository exists to prevent.
 Decompose the whitened structural residual against the projector `P` onto the sensitivity columns:
 
 - The **in-span** part *is* the estimate. Any bias built from it forces `SNR_total ≤ 1`.
-- The **out-of-span** part `ρ̃ = (I−P)Δg` is exactly independent of the fault — `S·δ_true` lies in
+- The **out-of-span** part `ρ̃ = (I−P)Δg` is exactly independent of the fault - `S·δ_true` lies in
   the span, so subtracting it leaves `ρ̃` untouched. It is measurable without knowing the truth, and
   it says: *this much of what I see, no setting of my parameters can produce.*
 
-Convert it to parameter units with the tight Cauchy–Schwarz scale (`observability.bias.lack_of_fit_bias`):
+Convert it to parameter units with the tight Cauchy-Schwarz scale (`observability.bias.lack_of_fit_bias`):
 
 $$b^{\text{lof}}_i = \lVert \tilde\rho \rVert \cdot \sigma_i, \qquad \sigma_i = \sqrt{[\mathrm{FIM}^{-1}]_{ii}}$$
 
 Three properties, all tested:
 
 - **Invariant to the noise scale.** Halve every sensor's σ: `‖ρ̃‖` doubles, `σ_i` halves, `b_lof` does
-  not move. A structural error must not improve when you buy better sensors — the same invariance
+  not move. A structural error must not improve when you buy better sensors - the same invariance
   `parameter_bias` has, and the reason this may occupy the same slot in `decide`.
 - **`bias_ceiling = SNR_var / ‖ρ̃‖`.** The model must fit the change at least as well as the fault is
   loud.
@@ -187,7 +187,7 @@ The middle panel is the whole argument for the primary fault: the measured diffe
 on `−ΔR·I(t)`, which is exactly the ECM's `R₀` sensitivity. The bottom panel is the whole argument
 for the confounder: a slow, drifting shape that no first-order RC branch can produce at any
 parameter setting. Note too that the diffusivity fault leaves the two cells identical at `t = 0` and
-parts them only as transport lags — while a contact resistance bites on the first sample. One is
+parts them only as transport lags - while a contact resistance bites on the first sample. One is
 dynamics; the other is algebra.
 
 ### 4b. Raw vs baseline-corrected, on a real 20% fault
@@ -213,7 +213,7 @@ these estimates are exquisitely precise, and two of the three are wrong.
 
 Double the series resistance (ΔR = 25 mΩ) and the raw path is loud enough to clear its own
 phantom's gate: `SNR_total = 10.7σ`. It then **diagnoses in 100% of trials, reporting +91.4% against
-a truth of +100%** — an 8.6-point miss inside a 0.23%-wide interval.
+a truth of +100%** - an 8.6-point miss inside a 0.23%-wide interval.
 
 | | diagnosis | true positive | harmful overclaim |
 |---|---|---|---|
@@ -227,7 +227,7 @@ is not detection.
 ### 4d. The magnitude sweep, and where the transition sits
 
 Paired path, 400 trials per point. `b_lof` is zero to floating-point dust throughout, so the
-credibility gate is inert and the verdicts are pure Cramér–Rao.
+credibility gate is inert and the verdicts are pure Cramér-Rao.
 
 | ΔR [mΩ] | ΔR/R₀ | SNR | diagnose | true pos | weak | refuse |
 |---|---|---|---|---|---|---|
@@ -241,21 +241,21 @@ credibility gate is inert and the verdicts are pure Cramér–Rao.
 | 25.000 | 100% | 1195.4 | 1.00 | 0.94 | 0.00 | 0.00 |
 
 The transition sits exactly where the CRLB puts it: `σ(ΔR) = 0.021 mΩ`, so 5σ is 0.105 mΩ, and
-diagnosis begins there. Nothing about the 20 mV phantom enters — the differential cancelled it.
+diagnosis begins there. Nothing about the 20 mV phantom enters - the differential cancelled it.
 
 **The true-positive rate saturates at 0.94, not 1.00, and that is correct.** A 95% interval misses
 its truth 5% of the time by construction, so 5% of confident, *correct* diagnoses are counted
 harmful overclaims. Harmful overclaim floors at `1 − coverage_level` for any detector that
 diagnoses at all. v0.3's 0% overclaim came from 0% diagnosis; it is not a number to aspire to.
 
-### 4e. The confounder, refused — by one percent
+### 4e. The confounder, refused - by one percent
 
 Cathode particle diffusivity `×0.3`: particle cracking, surface reconstruction. **No lithium and no
 active material is lost, so the true `(R0, capacity)` deviation is `(0, 0)`.** That is not asserted
-from the parameter we set — it is measured. The faulted pseudo-OCV shifts by 9.6 mV RMS at C/20,
+from the parameter we set - it is measured. The faulted pseudo-OCV shifts by 9.6 mV RMS at C/20,
 which a first draft of this document wrongly called "unchanged". But the shift is **linear in
 current** (199 mV per C, over a 10× rate range), hence an overpotential, hence extrapolating to zero:
-the equilibrium OCV–SOC relation, and with it the coulombic capacity, is untouched. A thermodynamic
+the equilibrium OCV-SOC relation, and with it the coulombic capacity, is untouched. A thermodynamic
 capacity loss would shift the curve by a fixed amount at every rate, including zero.
 
 Under a 0.5C pulsed load the same fault moves the voltage by 49.9 mV RMS, and the observer reads it as:
@@ -281,16 +281,16 @@ a null has no true positives, and a faulted cell has no false ones.
 
 | scenario | TPR | FPR | refusal | weak | overclaim |
 |---|---|---|---|---|---|
-| healthy (null) | — | **0.00** | 0.95 | 0.04 | 0.00 |
-| weak fault (+0.05 mΩ) | 0.00 | — | 0.36 | 0.64 | 0.00 |
-| real fault (+5.00 mΩ) | **0.94** | — | 0.00 | 0.00 | 0.06 |
-| confounded (D ×0.3), R0 hypothesis | — | **0.00** | **1.00** | 0.00 | 0.00 |
-| confounded (D ×0.3), capacity hypothesis | — | **0.00** | **1.00** | 0.00 | 0.00 |
+| healthy (null) | - | **0.00** | 0.95 | 0.04 | 0.00 |
+| weak fault (+0.05 mΩ) | 0.00 | - | 0.36 | 0.64 | 0.00 |
+| real fault (+5.00 mΩ) | **0.94** | - | 0.00 | 0.00 | 0.06 |
+| confounded (D ×0.3), R0 hypothesis | - | **0.00** | **1.00** | 0.00 | 0.00 |
+| confounded (D ×0.3), capacity hypothesis | - | **0.00** | **1.00** | 0.00 | 0.00 |
 
 ![finds the fault it can express, refuses the one it cannot](../reports/figures/positive_control_rates.png)
 
 The gate does exactly one thing, and does it only when needed. Against a fault the observer can
-express, the bias-aware SNR *equals* the variance-only SNR at every magnitude — the lack of fit is
+express, the bias-aware SNR *equals* the variance-only SNR at every magnitude - the lack of fit is
 zero, so there is nothing to object to. Against the confounder, the same statistic cuts 579σ of
 confidence down to 1.98σ:
 
@@ -303,14 +303,14 @@ confidence down to 1.98σ:
 This is the section to read before quoting anything above.
 
 - **The lack-of-fit bias is a screen, not a bound.** It measures the model's error in the directions
-  the estimate does *not* live in. On the one case where the truth is known — the healthy cell,
-  where the entire −67.6% estimate *is* bias — it reports 20.9%: it captures **31% of the structural
+  the estimate does *not* live in. On the one case where the truth is known - the healthy cell,
+  where the entire −67.6% estimate *is* bias - it reports 20.9%: it captures **31% of the structural
   error it is warning about**. It caught the overclaim anyway. It would not have caught one three
   times smaller.
 
 - **A structural error lying entirely in the observer's span is invisible to it**, and to everything
   else. `‖ρ̃‖ = 0` means the model reproduces the change exactly, so attributing it to a parameter is
-  the *only* thing the data supports — whether or not that is what physically happened. This is a
+  the *only* thing the data supports - whether or not that is what physically happened. This is a
   theorem about the experiment, not a defect of the implementation. Only a different excitation or a
   richer model separates such a change from a real parameter shift.
 
@@ -335,7 +335,7 @@ This is the section to read before quoting anything above.
 
 - **Capacity fade is still not injected.** `Nominal cell capacity [A.h]` only normalises the C-rate;
   it changes no electrode capacity. Real fade is loss of lithium inventory or active material, and
-  both move the stoichiometry window and hence the OCV–SOC map — which would break the
+  both move the stoichiometry window and hence the OCV-SOC map - which would break the
   shared-pseudo-OCV control that isolates dynamic mismatch in the first place. `LIMITATIONS.md` §15.
 
 ---
@@ -350,7 +350,7 @@ marginal one, and refuses a real physical change it cannot name. Before v0.4 it 
 those and could not have done the others, and nothing in the repository would have said so.
 
 **Diagnosis is not detection.** A system can diagnose a real fault in every trial while its interval
-never covers the truth — §4c does exactly that, at 10.7σ of misplaced confidence. Scoring only
+never covers the truth - §4c does exactly that, at 10.7σ of misplaced confidence. Scoring only
 overclaim rewards silence; scoring only diagnosis rewards noise. `detection_metrics` reports both,
 and the price of the honest gate is legible: **0.94 true positives, not 1.00, and a √2 wider σ.**
 

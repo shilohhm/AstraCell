@@ -13,11 +13,11 @@ version: 0.9.0
 abstract: >-
   AstraCell determines which lithium-ion battery-pack faults are identifiable under a
   specified model, sensor topology, noise process, and excitation. It combines Fisher
-  information, Cramér–Rao bounds, model-bias gating, calibrated abstention, and
+  information, Cramér-Rao bounds, model-bias gating, calibrated abstention, and
   counterfactual experiment design.
 keywords:
   - battery diagnostics
   - fault identifiability
   - observability
   - Fisher information
-  - Cramér–Rao bound
+  - Cramér-Rao bound

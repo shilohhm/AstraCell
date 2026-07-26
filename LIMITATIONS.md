@@ -25,7 +25,7 @@ Neither OCV curve is fitted to a real cell.
   order-of-magnitude representative of a large-format prismatic cell. None comes
   from a datasheet.
 
-**Consequence.** Every SNR, every Cramér–Rao bound, and every "this fault is
+**Consequence.** Every SNR, every Cramér-Rao bound, and every "this fault is
 detectable above 0.8C" statement is a statement about *this model*, not about a
 battery. The machinery is what is being validated here; the numbers are
 illustrative. Replace `cell/ocv.py` with PyBaMM-derived or measured tables before
@@ -33,7 +33,7 @@ quoting a single figure outside this repository.
 
 ---
 
-## 2. The Fisher information is an optimistic upper bound — but not uniformly
+## 2. The Fisher information is an optimistic upper bound - but not uniformly
 
 The CRLB says: *no unbiased estimator can do better than this.*
 
@@ -86,7 +86,7 @@ Consequences that break earlier claims in this repo:
   faults are then identifiable **nowhere** on this pack, not "exactly where the
   thermocouples are".
 - A thermocouple's share of the cooling information collapses from **90.4%** at
-  `rho = 0` to **0.8%** at `rho = 0.99` — the thermal time constant (~200 s) is
+  `rho = 0` to **0.8%** at `rho = 0.99` - the thermal time constant (~200 s) is
   essentially DC against a 1 Hz sampler, so whitening annihilates exactly the
   channel that was supposed to see the fault. `hA` is then read through `R0(T)`'s
   leak into the voltage channel.
@@ -101,7 +101,7 @@ Consequences that break earlier claims in this repo:
 optimistic choice available and that this repo made it silently. The headline
 numbers in `README.md` are quoted at `rho = 0` and are now labelled as such.
 
-### 2b. The current is now carried as a nuisance parameter — cheaply, usually
+### 2b. The current is now carried as a nuisance parameter - cheaply, usually
 
 `ParamKind.CURRENT_BIAS` is a pack-global unknown offset on the measured current,
 given a Gaussian prior equal to the shunt's accuracy (2 A) via `prior_information`
@@ -116,7 +116,7 @@ white noise, cell 10):
 | pulse train, 1.0C | ×1.00 | ×1.18 | ×1.00 | ±0.0055 A | 5.1 |
 | constant current  | **×6.50** | ×1.29 | ×1.00 | ±0.1767 A | **261.7** |
 
-Under pulsed excitation the cost is near nil — 32 voltage channels pin a
+Under pulsed excitation the cost is near nil - 32 voltage channels pin a
 common-mode offset ~400× better than the shunt's own spec. `R0` and `hA` pay
 nothing; capacity pays 18%.
 
@@ -126,7 +126,7 @@ capacity drift. Every VIF crosses the multicollinearity threshold of 10 by one t
 two orders of magnitude, `R0` alone degrades 6.5×, and the decision layer must
 return `REFUSE_CONFOUNDED`. **With no excitation there is no way to tell the
 ammeter from the pack.** Constant-current parameter estimation is not identifiable
-once you admit the ammeter is imperfect — and every real ammeter is.
+once you admit the ammeter is imperfect - and every real ammeter is.
 
 This is opt-in: `grey_cell_map(..., include_current_bias=True)`. The default is
 `False`, which is the optimistic choice, and is one of the reasons the bound
@@ -138,7 +138,7 @@ remains an upper bound.
    remaining gap, not quantified anywhere in this repo." It is now quantified, and
    it is worse than the noise idealisation was. Everything the CRLB says remains
    conditional on a model structure that is false, and the resulting bias is
-   invisible to every number in §§1–11. See **§12**.
+   invisible to every number in §§1-11. See **§12**.
 4. **Estimators are assumed unbiased.** The CRLB does not bound biased estimators.
    Regularised, thresholded, or ML estimators routinely beat it in MSE by trading
    bias for variance. "Below 2σ" therefore means "no *unbiased* estimator sees
@@ -147,7 +147,7 @@ remains an upper bound.
    deliberate trade for variance. It is an accident of the model.
 5. **Sensitivities are local.** Central finite differences at `eps = 1e-3`
    relative. A 40% capacity fault is not a small perturbation, and the linearised
-   bound will misstate detectability for large faults — in an unknown direction.
+   bound will misstate detectability for large faults - in an unknown direction.
 6. **The noise correlation is a single AR(1) pole.** Real 1/f noise is not AR(1);
    it is a superposition of poles. AR(1) captures the qualitative DC-versus-pulse
    split exactly, but a measured PSD would not be reproduced by any single `rho`.
@@ -187,7 +187,7 @@ not measure.
   capacity vs hA) and cross-cell confounding (a hot neighbour looks like a hot
   cell). This is the honest computation. It costs `2 × n_cells × 3` simulations.
 - `observability.detectability_heatmap` uses only the **target cell's** three
-  parameters, for cost. It therefore *understates* the CRLB — it is optimistic.
+  parameters, for cost. It therefore *understates* the CRLB - it is optimistic.
 
 Both are documented at their call sites. Do not mix them up when quoting a number.
 
@@ -236,7 +236,7 @@ a property of the sensor topology, not of the algorithm.
 On the `LFP_LIKE` curve, `dOCV/dSOC` in the plateau is roughly one sixth of the
 NMC-like value. Capacity faults are correspondingly harder to see mid-SOC. This
 is real, is reproduced by `notebooks/01_identifiability_study.ipynb`, and is a
-qualitative statement only — see limitation 1.
+qualitative statement only - see limitation 1.
 
 ---
 
@@ -248,15 +248,15 @@ qualitative statement only — see limitation 1.
 - No claim in this repository has been validated against anything but itself.
 
 This section used to add a fifth line: *"No CRLB has been shown to be attainable… nobody has run
-an estimator on noisy data and compared its scatter to the bound."* **That is now done** — see
-§13 and `observability.estimator`. A Gauss–Newton fit's scatter matches `sqrt(CRLB)` and its
+an estimator on noisy data and compared its scatter to the bound."* **That is now done** - see
+§13 and `observability.estimator`. A Gauss-Newton fit's scatter matches `sqrt(CRLB)` and its
 coverage tracks nominal under a matched model. But the estimator runs against the *synthetic*
 plant, so it shows the bound is attainable *for this model*, not that this model is a battery.
 The first four lines above still stand, and they are the ones that matter.
 
 This section used to end: *"the correct next step is to inject faults with a **higher-fidelity
 model** than the one the observer assumes, so that model mismatch is part of the experiment.
-That is not done here."* **It is now done** — see §12 and `src/astracell/plant/` — but with a
+That is not done here."* **It is now done** - see §12 and `src/astracell/plant/` - but with a
 hand-written intermediate plant, not PyBaMM.
 
 That choice was deliberate and it has a cost. The benefit: a plant whose mismatch knobs all
@@ -282,14 +282,14 @@ declaring parameters confounded (`1e4`) is likewise a convention.
 
 ## 12. The observer's model is wrong, and now we know what that costs
 
-Sections 1–11 all describe *variance*: how finely a correct model could be pinned
+Sections 1-11 all describe *variance*: how finely a correct model could be pinned
 down by imperfect data. This section describes *bias*: how far a wrong model lands
 from the truth however perfect the data. They are not the same kind of error and
 the difference is the point.
 
-`examples/04_model_mismatch.py` runs a higher-fidelity **plant** — SOC-dependent
+`examples/04_model_mismatch.py` runs a higher-fidelity **plant** - SOC-dependent
 `R0`, a slow diffusion branch the ECM lacks, a core/surface thermal split, and a
-laggy thermocouple — against the same first-order ECM **observer** the rest of the
+laggy thermocouple - against the same first-order ECM **observer** the rest of the
 repository uses. Both are given *identical* parameters, so every difference is
 structural. The fit does not converge on the true `θ*` but on the pseudo-true
 
@@ -315,7 +315,7 @@ detects it. This is the same fact that lets a pack-global nuisance parameter abs
 
 The capacity bias is not a bug. It is arithmetic: a slow polarisation droop of a few
 millivolts is indistinguishable from coulombs that never left the cell, so the observer
-attributes it to a capacity 18.5% smaller than the truth — **almost four times the fault
+attributes it to a capacity 18.5% smaller than the truth - **almost four times the fault
 it was asked to look for.** Short-window capacity estimation with a first-order ECM
 manufactures the very fault it is hunting.
 
@@ -341,18 +341,18 @@ unboundedly more confident and no less wrong the more data you feed it.**
 
 - **Excitation does not remove structural error. It decides which parameter absorbs it.**
   Raising the pulse amplitude from 0.25C to 2.5C improves every CRLB, drives `R0`'s bias
-  from −10.1% through zero to +1.1%, and drives capacity's from −2.2% to −19.3% — capacity's
+  from −10.1% through zero to +1.1%, and drives capacity's from −2.2% to −19.3% - capacity's
   bias *ceiling* falling from 2.26σ to 0.26σ as it does so. The Ds-optimal test planner of
   `examples/03_next_best_test.py` will therefore recommend a hard pulse train to sharpen
   a capacity estimate and destroy its credibility in the process. **It optimises variance
   and cannot see bias. That is a real defect in §8 of the README, not a nuance.**
 - **Nuisance parameters are where model error hides.** Freeing the pack-global current
-  bias collapses capacity's bias from −18.5% to +0.3% — genuinely, because a nuisance
+  bias collapses capacity's bias from −18.5% to +0.3% - genuinely, because a nuisance
   regressor spanning the residual is the textbook cure for omitted-variable bias. The
   price is a reported shunt offset of **+1.11 A that is not a shunt offset at all**, sits
   comfortably inside its 2 A prior, and is flagged by nothing. §2b called that nuisance
   parameter "cheap". It is cheap in variance and expensive in interpretability.
-- **`README.md` §1's headline table, and every SNR in §§1–8, are variance-only.** They are
+- **`README.md` §1's headline table, and every SNR in §§1-8, are variance-only.** They are
   upper bounds on the performance of an estimator using a model we know to be false.
 
 ### 12d. What §12 itself is not
@@ -374,8 +374,8 @@ unboundedly more confident and no less wrong the more data you feed it.**
   `pseudo_true_bias`. Quote the iterated fit. The two converge as the mismatch shrinks
   (45% → 0.4% relative error over a 300× range), which is the only reason to believe
   either.
-- **The mismatch is pack-global**, hence common-mode. A *cell-specific* structural error —
-  one cell whose diffusion branch has degraded — would not be absorbed by any pack-global
+- **The mismatch is pack-global**, hence common-mode. A *cell-specific* structural error -
+  one cell whose diffusion branch has degraded - would not be absorbed by any pack-global
   nuisance, and is not modelled.
 - **`θ*` is a convention.** The plant has no parameter called "`R0`"; it has `R0(SOC, T)`.
   Every mismatch term is defined to vanish at the initial operating point so that the
@@ -394,7 +394,7 @@ Where it was *confident*, it was sometimes confidently wrong, and now it says so
 
 §12 priced the model error on one example. `calibration/` asks whether that was luck: across
 thousands of repeated experiments with a *known injected fault*, do AstraCell's intervals and
-verdicts mean what they claim? The answer is yes under a matched model and no under mismatch —
+verdicts mean what they claim? The answer is yes under a matched model and no under mismatch -
 which is exactly what should happen, and the first time this repository has *measured* it rather
 than argued it. `examples/05_calibrated_abstention.py` and `docs/CALIBRATION.md` carry the full
 result. What follows is what it does **not** establish.
@@ -407,7 +407,7 @@ numbers:
 
 - The **matched-model coverage** result (the MLE attains the CRLB) is genuine but uses the
   `fit_gauss_newton` estimator, which is a *fixed-information* M-estimator, not the exact Newton
-  MLE. Its scatter matches the CRLB up to the model's curvature — measured at ~6% on the demo
+  MLE. Its scatter matches the CRLB up to the model's curvature - measured at ~6% on the demo
   fault, not zero. At larger faults the linearisation degrades in a direction coverage would
   reveal but a point estimate would not.
 - The **mismatch coverage** results use the exact linear-Gaussian `fit_linear`, whose own
@@ -418,13 +418,13 @@ numbers:
 ### 13b. "Calibrated" is conditional on the mismatch we wrote
 
 The bias gate is exactly as good as the plant we guessed. The coverage curves show the
-variance-only interval undercovering and the bias-aware gate refusing — but *the bias it gates
+variance-only interval undercovering and the bias-aware gate refusing - but *the bias it gates
 on is computed against `REALISTIC_MISMATCH`*. A structural error of a different shape (a degraded
-cell, a chemistry the ECM mismodels differently, a cell-specific rather than pack-global fault —
+cell, a chemistry the ECM mismodels differently, a cell-specific rather than pack-global fault -
 see §12d) would produce a different bias, and might not be gated at all.
 
 > **v0.3 update.** §14 relaxes this one step: the gate is now tested against a mismatch we did
-> *not* write — a PyBaMM cell's diffusion — and it still refuses. That is a mismatch we did not
+> *not* write - a PyBaMM cell's diffusion - and it still refuses. That is a mismatch we did not
 > *design*, but it is still a *synthetic* one; PyBaMM is a model, not a cell. Calibration under a
 > mismatch you did not write is now tested; calibration against a *real* cell still cannot be,
 > synthetically.
@@ -433,7 +433,7 @@ see §12d) would produce a different bias, and might not be gated at all.
 
 - **Harmful overclaim** is defined as a DIAGNOSE whose *variance-only* interval misses the truth
   at 95%. That flags R0 diagnoses whose magnitude is biased past a tight interval even though the
-  fault is real — arguably harsh, since the existence claim is correct. The definition is
+  fault is real - arguably harsh, since the existence claim is correct. The definition is
   deliberately strict (an interval that misses is an interval that lied), but a different cost
   model would count differently.
 - **Coverage** is two-sided and Gaussian (`two_sided_z` via the normal quantile). The estimator's
@@ -446,7 +446,7 @@ see §12d) would produce a different bias, and might not be gated at all.
 
 Set against those caveats, three things are now measured facts about the code, not hopes:
 
-1. The noise model, whitening, and interval arithmetic are mutually consistent — the sampled
+1. The noise model, whitening, and interval arithmetic are mutually consistent - the sampled
    noise whitens to white, and matched-model coverage is nominal to sampling error. The AR(1)
    whitening bug of §2a could not survive this test.
 2. Under mismatch the variance-only interval undercovers to the point of *never* covering, and
@@ -463,7 +463,7 @@ resembles a cell remains the unproven question at the centre of every section ab
 
 §13b named the sharpest limit of the calibration work: the bias gate was only ever tested against
 `REALISTIC_MISMATCH`, *a plant we wrote*. v0.3 closes that specific gap and no other. The data now
-comes from a **PyBaMM** SPMe single cell — electrolyte and particle diffusion the first-order ECM
+comes from a **PyBaMM** SPMe single cell - electrolyte and particle diffusion the first-order ECM
 cannot express, a gap we did not design. `examples/06_external_plant_gate.py`,
 `tests/test_external_plant.py`, and `docs/EXTERNAL_PLANT.md` carry the result; what follows is what
 it still does not establish.
@@ -472,7 +472,7 @@ it still does not establish.
 
 PyBaMM is a sophisticated *model*, not a measured battery. v0.3 swaps a simple synthetic plant for
 a complex one; it introduces no real cell. Everything §1 says about the models being stand-ins
-still holds — SPMe is a better stand-in than the ECM, that is all. This is not EV validation, not
+still holds - SPMe is a better stand-in than the ECM, that is all. This is not EV validation, not
 even bench validation: one cell, one parameter set (Chen2020), one duty cycle, isothermal, no
 ageing, no pack. The claim is narrow on purpose: AstraCell's abstention behaves correctly when the
 data-generating model is richer than the observer. Whether the observer is right about a *physical*
@@ -481,14 +481,14 @@ cell is untouched.
 ### 14b. The result is stronger and worse than v0.1's, which is the point
 
 Against our own `REALISTIC_MISMATCH`, capacity carried a ~30% structural bias. Against PyBaMM the
-same observer, on a **healthy** cell, reports a **−67.6% ± 0.145%** capacity deviation — 466σ from
-the truth of zero — and diagnoses a fault that does not exist in 100% of ungated trials. The bias
+same observer, on a **healthy** cell, reports a **−67.6% ± 0.145%** capacity deviation - 466σ from
+the truth of zero - and diagnoses a fault that does not exist in 100% of ungated trials. The bias
 gate refuses all of them (harmful overclaim 100% → 0%). The self-consistency control (an
 ECM-generated trace through the same pipeline) covers at nominal to within 0.011, so the collapse
 is the plant's mismatch and not a harness bug. That AstraCell looks *worse* against a more faithful
 plant, and responds by refusing, is the honest outcome, not a regression.
 
-### 14c. The phantom fault's magnitude is not robust — only the refusal is
+### 14c. The phantom fault's magnitude is not robust - only the refusal is
 
 The −67.6% is not a property of the cell. It swings from **+114% to −68%**, changing sign, as the
 mean C-rate changes, and runs from **−94% to +5%** as the observer's fixed RC branch is retuned
@@ -496,23 +496,23 @@ toward the diffusion timescale (`docs/EXTERNAL_PLANT.md` §3d). Its instability 
 that it is model mismatch rather than capacity loss. An earlier draft of `calibration/external.py`
 asserted the bias was "robust to the R1/C1 choice"; measurement falsified that, and the claim was
 retracted in the code and here. What survives every excitation and every RC tuning is the
-*inequality* — bias exceeds the CRLB σ by more than 30× — so the variance-only interval overclaims
+*inequality* - bias exceeds the CRLB σ by more than 30× - so the variance-only interval overclaims
 and the gate refuses in all cases. Quote the direction, never the number.
 
 ### 14d. Deliberately out of scope for v0.3
 
 Capacity is the only target, because it is the only quantity the ECM and PyBaMM share a truth about
 (a healthy cell's deviation is exactly zero); `R0` and `hA` have no such clean external ground truth
-and are not assessed. No degradation is injected — the mismatch is entirely the model-order gap on a
+and are not assessed. No degradation is injected - the mismatch is entirely the model-order gap on a
 sound cell, and PyBaMM-side ageing is deferred. PyBaMM is an optional dependency: the core repo
 stays numpy-only and the whole external-plant suite skips cleanly without it, so nothing above is
 part of the guarantee the base install makes. The next honest step is the one every version has
-pointed at — a *measured* pseudo-OCV and pulse response — which no simulation, however faithful,
+pointed at - a *measured* pseudo-OCV and pulse response - which no simulation, however faithful,
 can stand in for.
 
 ---
 
-## 15. The refusal now discriminates — but only because v0.4 went looking for the bug
+## 15. The refusal now discriminates - but only because v0.4 went looking for the bug
 
 v0.3 asked whether AstraCell refuses under an external plant. It does. v0.4 asked the question that
 had to come next, and that v0.3 had no way to ask: **when the external cell really is broken, does
@@ -529,7 +529,7 @@ SNR_total = |b + ε| / sqrt(σ² + b²)        E[SNR_total²] = (b² + σ²)/(σ
 ```
 
 **A pure noise statistic, carrying no information about the data.** Whenever the bias exceeds the
-noise — the only regime a bias gate exists for — it concentrates on 1σ and returns
+noise - the only regime a bias gate exists for - it concentrates on 1σ and returns
 `REFUSE_MODEL_BIAS` with certainty. Measured: 300/300 refusals on 20 mV of sine wave, on an absurd
 1 V ramp implying a 1718% capacity deviation, and on a PyBaMM cell whose **series resistance has
 doubled**, where it dutifully labels the 91.4% fault "bias".
@@ -540,14 +540,14 @@ This is what a negative control cannot catch, and what a positive control catche
 ### 15b. The honest gate under-warns by 3.2×, and bounds nothing
 
 The replacement (`observability.bias.lack_of_fit_bias`) reads only the part of the residual that
-**no setting of the observer's parameters reproduces** — the out-of-span component, which is exactly
+**no setting of the observer's parameters reproduces** - the out-of-span component, which is exactly
 independent of any fault present and needs no counterfactual. It is invariant to the noise scale, as
 a structural bias must be.
 
 It is a **screen, not a bound**. The bias lives in the *in-span* part, which is unmeasurable without
 the truth; the screen infers it from the orthogonal part on the assumption that a model wrong in one
-subspace is wrong in the other. On the one case where the truth is known — v0.3's healthy cell, where
-the entire −67.6% estimate *is* bias — it reports 20.9%, capturing **31%** of the error it warns
+subspace is wrong in the other. On the one case where the truth is known - v0.3's healthy cell, where
+the entire −67.6% estimate *is* bias - it reports 20.9%, capturing **31%** of the error it warns
 about. It caught the overclaim. **It would not have caught one three times smaller.**
 
 And a structural error lying entirely *in* the observer's span leaves the screen at exactly zero. That
@@ -561,23 +561,23 @@ ECM's `∂V/∂R₀ = −I` exactly. The paired estimator recovers `+20.0000%` f
 cross-talk onto capacity. That exactness is *what a positive control is*: it proves the pipeline can
 recover a fault the observer can express, and it proves **nothing whatever** about faults it cannot.
 
-The confounder is where the physics is. Cathode diffusivity ×0.3 — real degradation, true
+The confounder is where the physics is. Cathode diffusivity ×0.3 - real degradation, true
 `(R₀, capacity)` deviation `(0, 0)`, verified by the C/20 shift being linear in current (199 mV/C over
 a 10× range) and hence a vanishing overpotential rather than a capacity loss. The observer reads it as
 a 119% capacity fault at 579σ. The gate refuses. **On the capacity hypothesis it refuses at 1.98σ
-against a 2.00σ threshold — by one percent.** Shorten the window from 600 s to 300 s and the same
+against a 2.00σ threshold - by one percent.** Shorten the window from 600 s to 300 s and the same
 hypothesis reaches 3.35σ and is merely weakened. The margin is real and it is thin, and it is pinned
 as a regression test.
 
 ### 15d. The baseline is the assumption, and ours is impossible
 
-Baseline subtraction and paired comparison are the same estimator — the projection is linear, and the
+Baseline subtraction and paired comparison are the same estimator - the projection is linear, and the
 identity holds to 6 × 10⁻¹⁶. The correction is exact. But the healthy baseline used here is the
 **identical simulation** with the fault parameter at its healthy value: same solver, same grid, same
 initial SOC, same day. A real beginning-of-life fingerprint is none of those. **Every detection rate
 in `docs/POSITIVE_CONTROL.md` is an upper bound on what any real baseline could deliver**, and the
 paired estimator's nominal coverage is a statement about the arithmetic, not about a workshop. Where
-no comparable baseline exists, the honest behaviour is v0.3's — refuse — which is a correct answer,
+no comparable baseline exists, the honest behaviour is v0.3's - refuse - which is a correct answer,
 not a failure mode, provided nobody mistakes it for discrimination.
 
 The cost of the correction is not zero: two traces means two noise draws, so `σ` widens by exactly
@@ -587,7 +587,7 @@ The cost of the correction is not zero: two traces means two noise draws, so `σ
 
 A system can diagnose a real fault in **every** trial while its interval **never** covers the truth.
 The raw path does exactly this at a doubled series resistance: `DIAGNOSE` at 10.7σ, reporting +91.4%
-against +100%, an 8.6-point miss inside a 0.23%-wide interval — 145σ of misplaced confidence, and a
+against +100%, an 8.6-point miss inside a 0.23%-wide interval - 145σ of misplaced confidence, and a
 harmful overclaim in every trial. `harmful_overclaim_rate` alone rewards silence; `diagnosis_rate`
 alone rewards noise. `detection_metrics` reports both, and scores a true positive only as
 *DIAGNOSE ∧ the interval covers the truth ∧ the sign is right*.
@@ -601,7 +601,7 @@ aspire to.
 
 Capacity fade is **still not injected**, and cannot be cleanly: `Nominal cell capacity [A.h]` only
 normalises the C-rate and changes no electrode capacity, while real fade (loss of lithium inventory,
-loss of active material) moves the stoichiometry window and hence the OCV–SOC map — which would break
+loss of active material) moves the stoichiometry window and hence the OCV-SOC map - which would break
 the shared-pseudo-OCV control that isolates *dynamic* mismatch in the first place. Fixing that means
 giving up the control or fitting the OCV too, and both are larger changes than v0.4 earns.
 
@@ -615,27 +615,27 @@ one we injected into it, and the next honest step remains the one every version 
 
 Every section above ends the same way: the next honest step is a *measured* cell, which no
 simulation can stand in for. v0.6 took that step and v0.7 widened it to the whole dataset. It runs
-the observer against the **Oxford Battery Degradation Dataset** — eight real Kokam 740 mAh cells
-cycled to end of life — and scores the capacity estimate against each age's **measured** fade. The
+the observer against the **Oxford Battery Degradation Dataset** - eight real Kokam 740 mAh cells
+cycled to end of life - and scores the capacity estimate against each age's **measured** fade. The
 ground truth is a number nobody in this project chose, and the run is now done on all eight cells:
-every cell fades 20–38%, the first-order ECM reports a capacity *gain*, and AstraCell refuses all 104
+every cell fades 20-38%, the first-order ECM reports a capacity *gain*, and AstraCell refuses all 104
 scored ages in both OCV modes (208/208 evaluations). `docs/REAL_CELL.md` carries the numbers, the
 figure, and the how-to-run; what follows is what that result does *not* settle.
 
-### 16a. The run has happened, on all eight cells — and every one refused
+### 16a. The run has happened, on all eight cells - and every one refused
 
-The run exists, on all eight Oxford cells: every cell fades **20–38%** (Cell1 to −24.2%), the
+The run exists, on all eight Oxford cells: every cell fades **20-38%** (Cell1 to −24.2%), the
 first-order ECM's capacity estimate wrong in sign on **7 of 8** (a +10.5% "gain" at Cell1's end of
 life; the eighth, Cell5, collapses to ≈0% at a vanishing σ, still tens of points from its −38% fade),
 and `REFUSE_MODEL_BIAS` on **all 104 scored ages, coverage 0/104, in both OCV modes** (208/208
-evaluations — no other verdict kind appears). Two things keep this honest. First, the numbers are
+evaluations - no other verdict kind appears). Two things keep this honest. First, the numbers are
 **not committed**: the ODC-ODbL data is a licensed ~266 MB download that never enters the repo, so the
 offline test suite exercises the whole pipeline on *synthetic* Oxford-format data and `examples/08`
-skips cleanly without the file — the repo stays green, and anyone reproducing the real numbers fetches
+skips cleanly without the file - the repo stays green, and anyone reproducing the real numbers fetches
 the data themselves. Second, and larger: a refusal, even on eight cells, is a *contact*, not a
 *validation*. It shows AstraCell abstains where it should; it says nothing about whether the ECM is
 right anywhere, because a system that refuses a real cell has still never confirmed one. What keeps
-the refusal from being vacuous is §16d — the same estimator provably recovers a fault it *can*
+the refusal from being vacuous is §16d - the same estimator provably recovers a fault it *can*
 express.
 
 ### 16b. What the real-cell result does, and does not, mean
@@ -643,7 +643,7 @@ express.
 The result exists now, and it is **contact, not validation**:
 
 - **Eight cells, but one chemistry and one duty cycle.** v0.7 scored all eight (v0.6 ran one), so the
-  phantom and the refusal recur on every cell rather than resting on a single one — they are no longer
+  phantom and the refusal recur on every cell rather than resting on a single one - they are no longer
   attributable to *this* cell. But all eight are the same Kokam pouch on the same 40 °C Artemis cycle:
   this is breadth within one chemistry, not across chemistries, formats, or duty cycles.
 - **The observer is still a first-order Thevenin ECM.** Everything §12 and §14 say about model-order
@@ -654,22 +654,22 @@ The result exists now, and it is **contact, not validation**:
   dependence the dataset actually carries in its `T` channel; `dOCV/dT` is set to zero because a
   room-temperature pseudo-OCV sweep does not measure it.
 - **The baseline is a real but imperfect fingerprint.** §15d named the identical-simulation baseline
-  as impossible in a workshop; the dataset supplies the honest alternative — the earliest
-  characterisation age — but that age is a *different day and temperature history* from every later
+  as impossible in a workshop; the dataset supplies the honest alternative - the earliest
+  characterisation age - but that age is a *different day and temperature history* from every later
   one, so the paired differential now carries baseline drift the synthetic control never had. That
   is more realistic and strictly harder, not a free upgrade.
 - **The ECM cannot represent the ends of the SOC range.** The observer re-integrates only within
   `SOC ∈ [~0.02, 0.98]`, so the paired window discards the top ~2 % of charge a full 1C discharge
   spans, and must stay above ~0.03 at the other end. A real full-discharge curve lives partly where
-  the model structurally cannot follow it — itself a source of lack-of-fit, expected and not hidden.
+  the model structurally cannot follow it - itself a source of lack-of-fit, expected and not hidden.
 - **No fault is injected or detected.** The dataset's ageing is real capacity fade scored against its
   own measurement, not a labelled fault-detection benchmark. AstraCell is being asked whether it
   *knows what it cannot see* on a real cell, not whether it can classify a named fault.
 
-### 16c. The run corrected the Readme — the file, not the docstring, is the authority
+### 16c. The run corrected the Readme - the file, not the docstring, is the authority
 
 "The scales are overridable should the file surprise us" was not idle: it did. The Readme states time
-`t` is in **seconds**; the file stores a **MATLAB datenum in days** — Cell1's first sample is
+`t` is in **seconds**; the file stores a **MATLAB datenum in days** - Cell1's first sample is
 735954.82, and day 735954 is 2015-01-08, exactly the Readme's own "Start date of tests". Read as
 seconds, the derived 1C current came out near **64000 A** and the fit window collapsed to zero; the
 run caught in one line what the Readme got wrong. The scale is now `_TIME_TO_S = 86400`, pinned in
@@ -677,7 +677,7 @@ run caught in one line what the Readme got wrong. The scale is now `_TIME_TO_S =
 The file also proved to be an old-format `.mat` that scipy reads directly (not the v7.3/HDF5 the
 Readme implies), and its slow pseudo-OCV repeats SOC where the 1 Hz charge counter holds, so
 `pseudo_ocv_curve` collapses exact duplicates before building the table. Every one of these was
-invisible to the synthetic tests and visible on first contact with the file — which is the whole
+invisible to the synthetic tests and visible on first contact with the file - which is the whole
 argument for running against real data rather than trusting its documentation.
 
 ### 16d. Why the refusal means something rather than nothing
@@ -688,41 +688,41 @@ exists and travels with this work. The identical paired estimator recovers an in
 on ECM-generated data to within its curvature (`tests/test_oxford.py::test_adapter_pair_is_self_
 consistent`), and recovered a real PyBaMM contact-resistance fault at `+20.0000%` (C14). So the
 refusal on every one of the eight cells is not the refuse-everything failure of v0.3: it happens
-because a real cell presents a change this observer genuinely cannot express — differential
-lack-of-fit in the hundreds (636–1151 at end of life across the eight), not the ≈0 of an expressible
+because a real cell presents a change this observer genuinely cannot express - differential
+lack-of-fit in the hundreds (636-1151 at end of life across the eight), not the ≈0 of an expressible
 change. And the per-age-OCV control against the shared-OCV headline (both in `examples/08`) does its
 job of catching a stuck "refuses always" gate: the two modes *disagree* in magnitude (e.g. +10.5% vs
 +17.1% at Cell1's end of life), so the machinery is discriminating, not frozen. What it discriminates
-toward is still refusal — correctly, on a cell it cannot model — but it is refusal with its eyes open.
+toward is still refusal - correctly, on a cell it cannot model - but it is refusal with its eyes open.
 
-### 16e. The refusal is not a first-order artefact — depth was measured, not assumed (v0.8)
+### 16e. The refusal is not a first-order artefact - depth was measured, not assumed (v0.8)
 
 A fair objection to §16a: the observer is a *first-order* ECM, so perhaps the phantom is only the one
 missing timescale, and a second RC branch would dissolve it. v0.8 tested that directly. It reran the
-identical eight-cell loop with a **second-order** observer — a second RC branch, fixed timescale
-τ₂ ≈ 240 s, still fitting only `R0` and capacity — across all 208 evaluations. Nothing moved: **0/208
+identical eight-cell loop with a **second-order** observer - a second RC branch, fixed timescale
+τ₂ ≈ 240 s, still fitting only `R0` and capacity - across all 208 evaluations. Nothing moved: **0/208
 verdicts changed**, `REFUSE_MODEL_BIAS` held at 104/104 in both OCV modes, and the largest gap between
 the first- and second-order estimate over all 208 evaluations was **1.7×10⁻¹⁴** (lack-of-fit
-2.8×10⁻¹¹) — floating-point round-off.
+2.8×10⁻¹¹) - floating-point round-off.
 
 This is a **retraction as much as a result.** The v0.8 hypothesis, stated before the run, was that a
 second timescale would shrink the misfit. It was falsified: depth changes the capacity verdict by
-nothing. The reason is structural — voltage's sensitivity to `R0` and to capacity does not contain the
+nothing. The reason is structural - voltage's sensitivity to `R0` and to capacity does not contain the
 RC overpotentials (they cancel in `∂V/∂R0` and `∂V/∂Q`), so a *fixed* richer forward model is
 invisible to a fit over `(R0, capacity)`. Model order can enter the capacity verdict only by *fitting*
 the added dynamics (`R0,Q,R1,C1 → +R2,C2`): a 4→6-parameter identifiability problem that trades the
-model bias the gate now catches for fresh confounding — v0.9's problem, and this section asserts
+model bias the gate now catches for fresh confounding - v0.9's problem, and this section asserts
 nothing about its outcome. What §16e settles is narrow and worth stating plainly: the refusal in §16a
 is a property of a real cell exceeding the ECM, **not** of the ECM's model order. `examples/08` prints
 the depth table; `tests/test_second_order.py` pins the branch physics; see
-[docs/REAL_CELL.md](docs/REAL_CELL.md) and CLAIMS C20. The remaining door — *fitting* the branch — is
+[docs/REAL_CELL.md](docs/REAL_CELL.md) and CLAIMS C20. The remaining door - *fitting* the branch - is
 §16f.
 
-### 16f. Fitting the fast dynamics is inert on the capacity verdict too — H1 falsified (v0.9)
+### 16f. Fitting the fast dynamics is inert on the capacity verdict too - H1 falsified (v0.9)
 
 §16e closed the *fixed*-branch door: a second RC branch the observer does not fit is invisible to the
-`(R0, capacity)` estimate. It named the door still open — model order can enter the verdict only by
-*fitting* the dynamics — and left its outcome to v0.9. v0.9 walked through it. It reran the identical
+`(R0, capacity)` estimate. It named the door still open - model order can enter the verdict only by
+*fitting* the dynamics - and left its outcome to v0.9. v0.9 walked through it. It reran the identical
 eight-cell loop a third time with the first-order observer refit over **four** parameters,
 `(R0, capacity, R1, C1)`, so the fast RC branch is *estimated*, not held fixed. Two hypotheses were
 pre-registered ([docs/V0.9_PLAN.md](docs/V0.9_PLAN.md)): **H1**, that fitting `R1,C1` absorbs the
@@ -736,11 +736,11 @@ estimate is **3.57%** (Cell1 +10.50% → +9.52%), the phantom *gain* persists on
 lack-of-fit falls by a median of only ~4%. Fitting the branch does not rescue the capacity estimate.
 
 The result is **H0-dominant, with H2 confirmed only where it cannot reach the verdict.** `R1` is
-genuinely unidentifiable from a 1C discharge — its VIF is **~287**, far past the 10 line, exactly H2's
-information-poverty mechanism — but that confounding is **quarantined to `R1`**. Capacity's own VIF
+genuinely unidentifiable from a 1C discharge - its VIF is **~287**, far past the 10 line, exactly H2's
+information-poverty mechanism - but that confounding is **quarantined to `R1`**. Capacity's own VIF
 stays ~4 and its CRLB inflates ~2.5%, so capacity stays identifiable and its refusal reason stays
 `REFUSE_MODEL_BIAS`, never `REFUSE_CONFOUNDED`. The phantom is **OCV drift**, which fitting a fast RC
-branch cannot touch — the per-age control that removes OCV drift is the only thing that moves the
+branch cannot touch - the per-age control that removes OCV drift is the only thing that moves the
 estimate, and it moves it the *wrong* way (§16a). So §16f completes the arc §16e began: a *fixed*
 branch is invisible to the capacity fit, and a *fitted* branch is inert on it too, because a 1C
 discharge cannot identify the branch at all.
@@ -748,8 +748,8 @@ discharge cannot identify the branch at all.
 This is a statement about the **excitation, not the estimator**, and unlike §16e it is guarded by a
 positive control that proves the difference. `tests/test_dynamics_fit.py` shows the same 4-parameter
 fit recovers an injected `R1`/`C1` change *exactly* under a pulse train (VIF < 10) and refuses the
-identical `R1` fault as `REFUSE_CONFOUNDED` under a 1C discharge — so a real-cell refusal says *this
+identical `R1` fault as `REFUSE_CONFOUNDED` under a 1C discharge - so a real-cell refusal says *this
 experiment* cannot identify the branch, not that the code cannot. It points forward too: the cheapest
 test to earn a diagnosis differs by parameter (a pulse train earns `R1,C1`; the capacity phantom needs
-a moving-OCV model, not more parameters) — the active-experiment-design loop the v1.0 trust region
+a moving-OCV model, not more parameters) - the active-experiment-design loop the v1.0 trust region
 generalises. `examples/08` prints the fit-dynamics table; see CLAIMS C21.
