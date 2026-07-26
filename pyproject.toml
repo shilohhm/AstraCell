@@ -4,17 +4,35 @@ build-backend = "hatchling.build"
 
 [project]
 name = "astracell"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Observability-aware fault identifiability analysis for lithium-ion battery packs."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
-authors = [{ name = "AstraCell" }]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Shiloh Malka" }]
 keywords = ["battery", "prognostics", "fault-detection", "identifiability", "fisher-information"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy>=1.26",
     "matplotlib>=3.8",
 ]
+
+[project.urls]
+Homepage = "https://github.com/shilohhm/AstraCell"
+Documentation = "https://github.com/shilohhm/AstraCell/tree/main/docs"
+Issues = "https://github.com/shilohhm/AstraCell/issues"
+Source = "https://github.com/shilohhm/AstraCell"
 
 [project.optional-dependencies]
 dev = [
@@ -47,6 +65,12 @@ oxford = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/astracell"]
 
+[tool.hatch.build]
+exclude = ["/.timetracker"]
+
+[tool.hatch.version]
+path = "src/astracell/__init__.py"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
@@ -60,6 +84,7 @@ markers = [
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "NPY"]

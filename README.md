@@ -1,21 +1,40 @@
 # AstraCell
 
+[![CI](https://github.com/shilohhm/AstraCell/actions/workflows/ci.yml/badge.svg)](https://github.com/shilohhm/AstraCell/actions/workflows/ci.yml)
+[![Python 3.11–3.14](https://img.shields.io/badge/python-3.11%E2%80%933.14-3776AB.svg)](pyproject.toml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-2C3E50.svg)](LICENSE)
+
 **A battery diagnostic that knows what it can't see.**
 
-AstraCell determines, from first principles, which battery faults are *identifiable* given
-the battery model, the sensor topology, the measurement noise, and the excitation actually
-present in the data. It refuses to diagnose the rest — and computes what additional
-measurement would change its mind.
+AstraCell is a research-grade Python package for a question most battery diagnostics skip:
+*is this fault identifiable from the telemetry that actually exists?* It combines a
+first-principles battery-pack model with Fisher information, Cramér–Rao bounds, model-bias
+gating, and counterfactual experiment design. When the evidence is insufficient, it refuses
+to diagnose — then computes which sensor or excitation would make the question answerable.
+
+The interesting result is not a higher classifier score. It is an auditable boundary between
+what the system can infer and what it must leave unknown.
+
+## Engineering at a glance
+
+| Area | Evidence in this repository |
+|---|---|
+| **Numerical methods** | FIM/CRLB observability analysis, VIF-based isolation, structural-bias estimation, Monte Carlo calibration |
+| **Verification** | 256 tests covering physics invariants, property-based cases, regression findings, optional dependencies, and notebook integrity |
+| **Independent challenge** | Synthetic self-consistency, PyBaMM external simulation, positive controls, and all eight cells in the Oxford degradation dataset |
+| **Software quality** | Typed `src/` package, Ruff formatting/linting, mypy, multi-version CI, reproducible examples, and executed notebooks |
+| **Research discipline** | Claims-to-evidence ledger, pre-registered hypotheses, documented negative results, and explicit limitations |
+
+**Start here:** [five-minute portfolio](docs/PORTFOLIO.md) ·
+[technical report](docs/TECHNICAL_REPORT.md) ·
+[claims and evidence](docs/CLAIMS.md) ·
+[reproduce the results](docs/REPRODUCIBILITY.md) ·
+[what failed](docs/WHAT_DID_NOT_WORK.md)
 
 > ⚠️ **Read [`LIMITATIONS.md`](LIMITATIONS.md) before believing any number here.** The OCV
 > curves are stand-ins, not fitted cells. **Nothing in this repository has ever detected a
 > real fault, or touched a real battery.** Every bound below is a statement about *this
 > model*, validated against itself and against an external simulator — never against a cell.
-
-**Where to go from here:** the [technical report](docs/TECHNICAL_REPORT.md) is the full
-argument; the [portfolio page](docs/PORTFOLIO.md) is the five-minute version;
-[CLAIMS.md](docs/CLAIMS.md) maps every claim to the evidence that backs it;
-[REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) regenerates every number from a fresh clone.
 
 ---
 
@@ -78,7 +97,7 @@ noise. These numbers assume white noise and a known current — both are relaxed
 Cooling faults are identifiable on **4 of 32 cells** — exactly the four carrying a
 thermocouple. The fault on cell 10 is *really there*; AstraCell declines to diagnose it.
 
-![pack map](reports/figures/packmap_cooling.png)
+![A 4×8 battery pack map showing cooling faults as identifiable only on cells with temperature sensors](docs/assets/packmap_cooling.png)
 
 The rest of the argument, each finding linked to its example, test, and figure in
 [CLAIMS.md](docs/CLAIMS.md) and derived in full in the [report](docs/TECHNICAL_REPORT.md):
@@ -94,7 +113,7 @@ The rest of the argument, each finding linked to its example, test, and figure i
   an 18.5% capacity loss from a 5% fault — and *more data makes it worse*: reported
   confidence climbs to 14 611σ while credible confidence sits fixed at 6.49σ. *(`examples/04`)*
 
-  ![model mismatch](reports/figures/model_mismatch.png)
+  ![Model mismatch comparison showing reported confidence increasing while credible confidence remains bounded](docs/assets/model_mismatch.png)
 
 - **The verdicts are calibrated — and calibration makes them worse.** Under mismatch the
   variance-only interval covers the truth 0% of the time; the model-bias gate drops harmful
@@ -104,13 +123,13 @@ The rest of the argument, each finding linked to its example, test, and figure i
   self-consistency control proves it is PyBaMM's physics, not our harness. The gate refuses.
   *(`examples/06`)*
 
-  ![external phantom](reports/figures/external_estimate_distribution.png)
+  ![External simulator estimate distribution showing a confidently wrong phantom capacity fault](docs/assets/external_estimate_distribution.png)
 
 - **The refusal discriminates.** With a healthy baseline, the same machinery recovers a real
   injected fault at +20.0000% with nominal coverage, and still refuses a real degradation it
   cannot express — by a one-percent margin, reported not rounded away. *(`examples/07`)*
 
-  ![positive control](reports/figures/positive_control_rates.png)
+  ![Positive-control results showing the corrected gate recovering an injected fault while refusing an inexpressible degradation](docs/assets/positive_control_rates.png)
 
 - **On real cells, it refuses — and it should.** Run against all eight measured Oxford cells, each
   fading 20–38%, the first-order ECM's capacity estimate comes back wrong in *sign* — a phantom
@@ -147,7 +166,7 @@ or, with [`uv`](https://docs.astral.sh/uv/): `uv venv && uv pip install -e ".[de
 | `python -m pytest` | 256 tests, ~100 s (the real-cell test skips without the Oxford dataset; external-plant tests skip without PyBaMM) |
 | `python -m ruff check src tests examples scripts` · `python -m mypy` | lint · type-check |
 
-`make check` runs lint + typecheck + test; `make help` lists every target. The full
+`make check` runs lint + format check + typecheck + test; `make help` lists every target. The full
 pre-release sequence, the fresh-clone instructions, and the pinned-numbers guard are in
 [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
@@ -188,7 +207,7 @@ src/astracell/
   observability/                 sensitivity · fisher (FIM/CRLB/VIF) · mask · experiment · bias · estimator · decision
   plant/ calibration/            richer plants (incl. PyBaMM) · Monte Carlo coverage, external, positive control
   viz/                           pack maps and heatmaps
-examples/01..07                  the thesis, then each honesty pass in turn
+examples/01..08                  the thesis, then each honesty pass in turn
 notebooks/01..04                 generated by scripts/build_notebook.py, committed executed
 docs/                            TECHNICAL_REPORT · PORTFOLIO · CLAIMS · REPRODUCIBILITY · GLOSSARY ·
                                  FIGURES · WHAT_DID_NOT_WORK · CALIBRATION · EXTERNAL_PLANT ·
@@ -196,33 +215,27 @@ docs/                            TECHNICAL_REPORT · PORTFOLIO · CLAIMS · REPR
 LIMITATIONS.md                   written before the code; now also a record of claims this repo got wrong
 ```
 
-## Status
+## Project evolution
 
-Built in five passes. **v0.0** answered *"what is identifiable?"* — the Fisher/CRLB
-machinery, the grey-cell map, the refusal. **v0.1** added the **model-mismatch gate**: a
-higher-fidelity plant, the structural bias `b = FIM⁻¹Sᵀ Σ⁻¹ r`, and `REFUSE_MODEL_BIAS`.
-**v0.2** added **calibrated abstention**: an estimator, a Monte Carlo harness, and the
-coverage/overclaim numbers showing the variance-only verdicts do not hold up under mismatch.
-**v0.3** added the **external-simulator gate** (PyBaMM). **v0.4** added the **positive
-control**, and found that v0.3's gate had refused *everything* — its statistic was pure
-noise. The same machinery now recovers a real injected fault at its correct magnitude and
-still refuses a real degradation it cannot express. Worse numbers, and the first ones that
-mean anything.
+Each version added a harder credibility test; several made the headline result worse.
 
-There is still no residual bank, no classifier, no dashboard, and no LLM — and no *validated*
-real-cell result. Those come after, and only for the faults this machinery says are worth chasing
-and can be trusted. **v0.6 took the measured-cell step** every prior version pointed at, and **v0.7
-widened it to all eight cells** of the Oxford Battery Degradation Dataset: every cell fades 20–38%,
-the first-order ECM's capacity estimate comes back wrong in sign — a phantom *gain* on seven of eight
-(+10.5% against Cell1's −24.2% loss) — and AstraCell refuses all 104 scored ages in both OCV modes
-(208/208 evaluations). **v0.8** reran the identical loop with a *second-order* observer: the verdict
-did not move — 0/208 changed, largest change 10⁻¹⁴ — so the refusal is not a model-order artefact
-(model order enters the verdict only by *fitting* the dynamics, which is v0.9). Worse than any
-synthetic tier, and the honest outcome: the refusal is the result, now eight cells over. It is
-contact, not validation — eight cells, one chemistry. See
-[REAL_CELL.md](docs/REAL_CELL.md), the [technical report](docs/TECHNICAL_REPORT.md) §7, and
-[LIMITATIONS.md](LIMITATIONS.md) §16.
+| Version | Question introduced | Outcome |
+|---|---|---|
+| **v0.0** | Which faults are identifiable? | Fisher/CRLB machinery, grey-cell map, and explicit refusal |
+| **v0.1** | What if the observer model is wrong? | Structural-bias gate and `REFUSE_MODEL_BIAS` |
+| **v0.2** | Are the reported intervals calibrated? | Monte Carlo coverage showed variance-only confidence fails under mismatch |
+| **v0.3** | Does refusal survive independent physics? | PyBaMM produced a confidently wrong phantom fault; the gate refused it |
+| **v0.4** | Can the gate also accept a true positive? | A positive control exposed a broken statistic, then verified the corrected path |
+| **v0.5** | Can another engineer reproduce every claim? | Public package, evidence ledger, notebooks, and release gates |
+| **v0.6–0.7** | What happens on measured cells? | All eight Oxford cells exposed wrong-sign capacity estimates; 208/208 cases were refused |
+| **v0.8** | Is the refusal just a low-order-model artefact? | A second-order observer changed 0/208 verdicts |
+| **v0.9** | Does fitting the fast RC branch de-confound capacity? | Pre-registered H1 was falsified; the branch is itself unidentifiable from the discharge |
+
+There is still no residual bank, classifier, dashboard, LLM, or validated real-cell fault
+detection result. Those come only after the observability and model-validity gates say the
+question is worth asking. See [REAL_CELL.md](docs/REAL_CELL.md) for the measured-cell result
+and [LIMITATIONS.md](LIMITATIONS.md) for the claims this work does not support.
 
 ## License
 
-Apache-2.0.
+[Apache License 2.0](LICENSE).

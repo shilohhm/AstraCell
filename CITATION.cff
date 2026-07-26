@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use AstraCell in research or engineering work, please cite this software."
+title: "AstraCell: observability-aware battery fault identifiability"
+type: software
+authors:
+  - family-names: Malka
+    given-names: Shiloh
+    alias: shilohhm
+repository-code: "https://github.com/shilohhm/AstraCell"
+url: "https://github.com/shilohhm/AstraCell"
+license: Apache-2.0
+version: 0.9.0
+abstract: >-
+  AstraCell determines which lithium-ion battery-pack faults are identifiable under a
+  specified model, sensor topology, noise process, and excitation. It combines Fisher
+  information, Cramér–Rao bounds, model-bias gating, calibrated abstention, and
+  counterfactual experiment design.
+keywords:
+  - battery diagnostics
+  - fault identifiability
+  - observability
+  - Fisher information
+  - Cramér–Rao bound

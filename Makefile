@@ -1,4 +1,4 @@
-.PHONY: help install install-pybamm test lint fmt typecheck demo notebook notebook-run figures check clean
+.PHONY: help install install-pybamm test lint fmt format-check typecheck demo notebook notebook-run figures check clean
 
 PY ?= .venv/Scripts/python.exe   # on Linux/macOS: make PY=.venv/bin/python
 
@@ -8,6 +8,7 @@ help:
 	@echo "test            run the test suite (external-plant tests skip without PyBaMM)"
 	@echo "lint            ruff check"
 	@echo "fmt             ruff format"
+	@echo "format-check    verify formatting without changing files"
 	@echo "typecheck       mypy over src/"
 	@echo "demo            run examples/01_first_demo.py, writing reports/figures/"
 	@echo "notebook        regenerate notebook source under notebooks/ (strips outputs)"
@@ -32,6 +33,9 @@ lint:
 fmt:
 	$(PY) -m ruff format src tests examples scripts
 
+format-check:
+	$(PY) -m ruff format --check src tests examples scripts
+
 typecheck:
 	$(PY) -m mypy
 
@@ -46,7 +50,7 @@ notebook:
 notebook-run:
 	$(PY) -m jupyter nbconvert --to notebook --execute --inplace notebooks/*.ipynb
 
-check: lint typecheck test
+check: lint format-check typecheck test
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache reports/figures

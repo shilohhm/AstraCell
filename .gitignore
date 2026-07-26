@@ -13,6 +13,7 @@ venv/
 .ruff_cache/
 .hypothesis/
 .ipynb_checkpoints/
+.timetracker
 
 # Generated figures. The demo regenerates them: `make demo`.
 reports/figures/

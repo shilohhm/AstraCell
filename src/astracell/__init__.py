@@ -7,6 +7,6 @@ excitation actually present in the data, which faults could I possibly resolve?"
 Everything else is downstream of that question.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.9.0"
 
 __all__ = ["__version__"]
